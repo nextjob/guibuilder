@@ -1,8 +1,19 @@
-## to do - add saved widgedid to cell in table and update
-## process table and create layout (and event loop??)
-## test layout
-## use pickle to save dictionaries???
-'''
+"""
+How this works (or should work)
+ 1) User defines widgets, placing on layout table via row / column vars
+  -- more to do here - do not allow overwrite 
+                     - insert at col/row if row taken shifting cells to the right
+                     - does table auto grow this extra cell in row??
+ 2) User then groups widgets into container (or none)
+    - write this data out to the editor 
+    - requires some sort of a template pysimplegui script to start from
+    - with "tags" for areas to insert text?
+        - means we need to parse tempalte before we start!
+        - or have the template sections hard coded into builder and output to editor as needed
+ 3) test layout - write editor file out and execute via invoke to python interpreter 
+ use pickle to save dictionaries???
+"""
+"""
   A minimalist pysimplegui builder
   
   Editor based on :
@@ -11,9 +22,10 @@
   Author:     Israel Dryer
   Email:      israel.dryer@gmail.com
   Modified:   2020-06-20
-'''
+"""
 import PySimpleGUI as sg
 import pathlib
+import json
 
 import guibuilder_widgets as gw
 
@@ -22,8 +34,11 @@ sg.ChangeLookAndFeel('BrownBlue') # change style
 WIN_W = 90
 WIN_H = 25
 MAX_PROPERTIES = 45    # max number of properties we are setup to display
-TABLE_COL_COUNT = 10  # number of columns to create for layout table
-TABLE_ROW_COUNT = 20  # and rows
+#
+# note column sizing is kind of a copout, still cannot get table to update size when additional columns are added.  
+TABLE_COL_COUNT = 20  # number of columns to create for layout table
+TABLE_ROW_COUNT = 30  # and rows
+EMPTYCELL = '-       -'
 #
 # indexes into the data saved in the widget dictionary
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
@@ -69,7 +84,7 @@ def save_widget(values):
 # save the widget currently displayed on the entry screen into
 # ? a dictionary item #
 # then place it on the "layout" table
-    sg.popup('Save','Widget save processing here' + str(values['-SEL_WIDGET-']))
+#    sg.popup('Save','Widget save processing here' + str(values['-SEL_WIDGET-']))
 # do some error checking first 
 # rem - values['-key-'] return a list
 # and an empty list is false (implicit booleanness of the empty list)
@@ -106,12 +121,12 @@ def save_widget(values):
             prop_value = str(saved_props[i][1])
             prop_idx = saved_props[i][2]
             widget_prop_value = str(values[f'-PROP_VALUE_KEY{i}-'])
+            print (prop_value, widget_prop_value)
             if prop_value != widget_prop_value:
                 prop_list.append([prop_idx,prop_name,widget_prop_value])
 
 
     Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'], prop_list]
-    print (Saved_widgets)
     table_update(values['-WIDGET_ID-'])
 
 # place in table
@@ -126,16 +141,33 @@ def table_update(key):
         sg.popup('Error', key + ' Not Found in Saved_widgets?')
         return
     row = int(wInfo[ROW_IDX])
+    # if we selected a "row" larger than the row list, append  another row and set row to it
+    if len(tablevalues) < row:
+        tablevalues.append([EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)])
+        row = len(tablevalues) - 1
+
     col = int(wInfo[COL_IDX])
-    tablevalues[row][col] = key
+    # if we selected a "column" within the col list, 
+    # and its empty, add it
+    # else insert it
+    if col < len(tablevalues[row]):
+        if tablevalues[row][col] == EMPTYCELL:
+            tablevalues[row][col] = key
+        else:
+            tablevalues[row].insert(col,key)
+    # selected a col larger than the col list, append
+    else:
+        tablevalues[row].append(key)
+# need to figure out how to resize display area of table. Only solution provided so far is to close and recreate the window object
+
     window['-TABLE-'].update(values = tablevalues)
- 
+
 
 ################################## Editor functions #############################################################################
 def new_file():
     '''Reset body and info bar, and clear filename variable'''
-    EditWindow['_BODY_'].update(value='')
-    EditWindow['_INFO_'].update(value='> New File <')
+    window['_BODY_'].update(value='')
+    window['_INFO_'].update(value='> New File <')
     file = None
     return file
 
@@ -144,8 +176,8 @@ def open_file():
     filename = sg.popup_get_file('Open', no_window=True)
     if filename:
         file = pathlib.Path(filename)
-        EditWindow['_BODY_'].update(value=file.read_text())
-        EditWindow['_INFO_'].update(value=file.absolute())
+        window['_BODY_'].update(value=file.read_text())
+        window['_INFO_'].update(value=file.absolute())
         return file
 
 def save_file(file):
@@ -171,22 +203,47 @@ def word_count():
     sg.popup_no_wait('Word Count: {:,d}'.format(word_count))
 
 def insert_text():
-   EditWindow['_BODY_'].Widget.insert('2.5', 'My Inserted Text')
+   window['_BODY_'].Widget.insert('2.5', 'My Inserted Text')
 
 def about_me():
-    '''A short, pithy quote'''
-    sg.popup_no_wait(str(type(EditWindow['_BODY_'].Widget)))
+    sg.popup_no_wait('guibuilder 0.0')
+
+########################################## functions for saving and loading widget dictionary ##################################
+def save_data(formname):
+    try:
+        with open(str(formname)+'.json','w') as fp:
+            json.dump(Saved_widgets, fp, sort_keys=True, indent=4) 
+            sg.popup('Save Data', 'Data saved to: ' + str(formname)+'.json')
+    except OSError as e:
+        print(f"{type(e)}: {e}")
+
+def load_data(formname):
+    try:
+        with open(str(formname)+'.json', 'r') as fp:
+            Saved_widgets = json.load(fp)
+            sg.popup('Load Data', 'Data Loaded from: ' + str(formname)+'.json')
+    except OSError as e:
+        print(f"{type(e)}: {e}")
 
 ################################## start of layouts #############################################################################
-entry_layout =[
-# position data of widget on form 
-[sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True,)],
-[sg.HSep()],
+widget_tab = [
 [sg.Text('Widget Id'),sg.Input(size=(20,1), key = '-WIDGET_ID-',do_not_clear=True,)],
 [sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',do_not_clear=True,)],
 # dropdown list of widgets to select from
 [sg.Text('Widgets'),sg.Listbox(values=gw.widget_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_WIDGET-')],
-[sg.Button('Save Widget')],
+[sg.Button('Save Widget')]
+]
+
+Container_tab = [
+[sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
+[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
+# dropdown list of containers to select from
+[sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
+[sg.Button('Save Container')]
+]
+
+entry_layout =[
+[sg.TabGroup([[sg.Tab('Widgets', widget_tab), sg.Tab('Containers', Container_tab)]],key = '-TABS-',tab_location='top')], 
 [sg.HSep()],
 # property inspector list of labels and input boxes
 *[[sg.Text(f'property {i:02}',key = f'-PROP_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PROP_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
@@ -195,11 +252,25 @@ entry_layout =[
 ### prebuild our layout table
 tableheadings = [f'Col {col}' for col in range(TABLE_COL_COUNT)]
 
-tablevalues = [[f'- empty -' for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
+#
+menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
+              ['Help', ['About']]]
+#
+editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
+editor_tools_menu =['Unused', ['Word Count','Insert']]
 
-table_layout = [
+editor_layout =  [
+[sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
+[sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
+]
+
+#tablevalues = [[f'- empty -' for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
+tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
+table_editor_layout = [
+    [sg.Sizer(h_pixels=300)],
     [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
-                    auto_size_columns=True,
+                    auto_size_columns=False,
+                    col_widths = 25, 
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
                     display_row_numbers=True,
                     justification='center',
@@ -209,66 +280,89 @@ table_layout = [
 #                    selected_row_colors='red on yellow',
                     enable_events=True,
                     expand_x=False,
-                    expand_y=True,
+                    expand_y=False,
                     vertical_scroll_only=False,
+                    hide_vertical_scroll = False,
                     enable_click_events=True,           # Comment out to not enable header and other clicks
-                    tooltip='Layout Table')]
-]
-#
-editor_menu_layout = [['File', ['New (Ctrl+N)', 'Open (Ctrl+O)', 'Save (Ctrl+S)', 'Save As', '---', 'Exit']],
-              ['Tools', ['Word Count','Insert']],
-              ['Help', ['About']]]
-#
-editor_layout =  [
-[sg.Menu(editor_menu_layout)],
+                    tooltip='Layout Table')],
+[sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-")],
+[sg.HSep()],
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
-[sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
+[sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H),horizontal_scroll = True, key='_BODY_')]
 ]
+
 # guibuilder main form layout
 layout = [
+ [sg.Menu(menu_layout)],
  [sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
  [sg.HSep()],
- [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_layout,expand_x=True)]
+# [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,size=(600,300),vertical_alignment='top',scrollable = True)]
+[sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,vertical_alignment='top')]
 ]
 
 ############################################## Windows                ############################################################
-window = sg.Window('guiBuilder', layout=layout, margins=(0, 0), resizable=True,  finalize=True)
+window = sg.Window('guiBuilder', layout=layout, margins=(0, 0),size=(900,800), resizable=True,  finalize=True)
 pos_x, pos_y = window.current_location()
 win_width, win_height = window.size
 
-EditWindow = sg.Window('Editor',layout=editor_layout, resizable=True, location =(pos_x + win_width,pos_y), size=(600,win_height), return_keyboard_events=True, finalize=True)
+#EditWindow = sg.Window('Editor',layout=editor_layout, resizable=True, location =(pos_x + win_width,pos_y), size=(600,win_height), return_keyboard_events=True, finalize=True)
 #window.maximize()
-EditWindow['_BODY_'].expand(expand_x=True, expand_y=True)
+#EditWindow['_BODY_'].expand(expand_x=True, expand_y=True)
 
 
 ############################################## all important event loop ############################################################
 while True:
-    windowid, event, values = sg.read_all_windows()
-
+ #   windowid, event, values = sg.read_all_windows()
+    event, values = window.read()
+#    print(event, values)
     if event == sg.WIN_CLOSED or event == 'Exit':
-        if windowid == EditWindow:
-            sg.Popup('Keep Editor Open!')
+        break
+# Menu events
+
+    if event in ('Load'):
+        if sg.popup_ok_cancel('Warning, existing data will be overwritten') == sg.OK:
+            if not values['-FORM_NAME-']:
+                sg.popup('Load Data','No Form Name')
+            else:
+                load_data(values['-FORM_NAME-'])
+
+    if event in ('Save'):
+        if not values['-FORM_NAME-']:
+            sg.popup('Save Data','No Form Name')
         else:
-            break
-    if event in ('New (Ctrl+N)', 'n:78'):
-        file = new_file()
-    if event in ('Open (Ctrl+O)', 'o:79'):
-        file = open_file()
-    if event in ('Save (Ctrl+S)', 's:83'):
-        save_file(file)
-    if event in ('Save As',):
-        file = save_file_as()   
-    if event in ('Word Count',):
-        word_count() 
-    if event in ('Insert',):
-        insert_text()     
+            save_data(values['-FORM_NAME-'])
+
     if event in ('About',):
         about_me()
-#
+# Button Menu -FILE- Events
+    if event == '-EFILE-':
+        if values['-EFILE-'] == 'New':
+            file = new_file()
+        if values['-EFILE-'] == 'Open':
+            file = open_file()
+        if values['-EFILE-'] == 'Save':
+            save_file(file)
+        if values['-EFILE-'] == 'Save As':
+            file = save_file_as()
+        if values['-EFILE-'] == 'Exit':
+            break
+# Button Menu -TOOL- Events
+    if event == '-ETOOLS-':
+        if values['-ETOOLS-'] == 'Word Count':
+            word_count() 
+        if values['-ETOOLS-'] == 'Insert':
+            insert_text()
+
+
     if event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
         widget = values['-SEL_WIDGET-'][0]
     # rem returns default property values, used to id which ones user entered and needs to be saved
         saved_props = pop_inspector(gw.get_props(getattr(sg,widget)))
+
+    if event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
+        container = values['-SEL_CONTAINER-'][0]
+    # rem returns default property values, used to id which ones user entered and needs to be saved
+        saved_props = pop_inspector(gw.get_props(getattr(sg,container)))
 
     if event == 'Save Widget':
         save_widget(values)
@@ -286,5 +380,5 @@ while True:
             sg.popup('Cell Clicked: ', (f'{event[2][0]},{event[2][1]}'))
 
 
-EditWindow.Close()        
+       
 window.close()

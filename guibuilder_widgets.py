@@ -4,10 +4,13 @@
 '''
 import PySimpleGUI as sg
 import inspect
-# set of pysimplegui widgets for drop down
-widget_list = ('Button','ButtonMenu','Canvas','Checkbox','Column','Combo','Frame','Graph','HSep','Image','Input','Listbox','Multiline','OptionMenu','Output','Pane','Push','Radio','Sizegrip','Sizer','Slider','Spin','StatusBar','TabGroup','Table','Text','Tree','VPush','VSep')
+# set of pysimplegui widgets for drop down widget creation
+widget_list = ('Button','ButtonMenu','Canvas','Checkbox','Combo','Graph','HSep','Image','Input','Listbox','Multiline','OptionMenu','Output','Push','Radio','Sizegrip','Sizer','Slider','Spin','StatusBar','Table','Text','Tree','VPush','VSep')
 # set of wdiget properties that require quotes
-quoted_properties =('button_text','default_text','element_justification','key','k','text','title','tooltip')
+quoted_properties =('button_text','default_text','default_values','element_justification','key','k','text','title','tooltip')
+# set of pysimplegui widgets for containing other widgets
+container_list = ('Column','Frame','Tab','TabGroup')
+#
 def get_props(widget):
  # get the widget's inspect.signature object 
  # and convert into string
