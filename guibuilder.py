@@ -1,9 +1,10 @@
 """
 How this works (or should work)
  1) User defines widgets, placing on layout table via row / column vars
-  -- more to do here - do not allow overwrite 
-                     - insert at col/row if row taken shifting cells to the right
-                     - does table auto grow this extra cell in row??
+   - do not allow overwrite 
+   - does table auto grow this extra cell in row??
+
+   Do we create "layout" variables at this point?                    
  2) User then groups widgets into container (or none)
     - write this data out to the editor 
     - requires some sort of a template pysimplegui script to start from
@@ -48,8 +49,7 @@ Saved_widgets = {}        # empty dictionary of saved widgets
 WDGT_IDX = 0  # WIDGET ID (one of pysimplegui widgets)
 ROW_IDX  = 1  # ROW NBR for table placement and evental layout buildup
 COL_IDX  = 2  # COL NBR 
-LAY_IDX  = 3  # LAYOUT ID where this widget will be placed in
-PRM_IDX  = 4  # List of parameters entered, calculated by comparing "default" widget signature to what is in the property explorer
+PRM_IDX  = 3  # List of parameters entered, calculated by comparing "default" widget signature to what is in the property explorer
 
 file = None
 
@@ -121,7 +121,7 @@ def save_widget(values):
             prop_value = str(saved_props[i][1])
             prop_idx = saved_props[i][2]
             widget_prop_value = str(values[f'-PROP_VALUE_KEY{i}-'])
-            print (prop_value, widget_prop_value)
+    #        print (prop_value, widget_prop_value)
             if prop_value != widget_prop_value:
                 prop_list.append([prop_idx,prop_name,widget_prop_value])
 
@@ -136,6 +136,8 @@ def table_update(key):
 #
 # key - key for Saved_widgets dictionary of saved widgets 
 #
+    newrow = -1  # flag for changed row
+    newcol = -1  # flag for changed col
     wInfo = Saved_widgets[key]
     if wInfo == None:
         sg.popup('Error', key + ' Not Found in Saved_widgets?')
@@ -145,6 +147,7 @@ def table_update(key):
     if len(tablevalues) < row:
         tablevalues.append([EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)])
         row = len(tablevalues) - 1
+        newrow = row
 
     col = int(wInfo[COL_IDX])
     # if we selected a "column" within the col list, 
@@ -154,14 +157,29 @@ def table_update(key):
         if tablevalues[row][col] == EMPTYCELL:
             tablevalues[row][col] = key
         else:
-            tablevalues[row].insert(col,key)
+            tablevalues[row].insert(col+1,key)
+            newcol = col+1
+    
     # selected a col larger than the col list, append
     else:
         tablevalues[row].append(key)
+        newcol = len(tablevalues[row])-1
+
+    # did we change col / row selected by user? if so we must update the dictionary
+    # 
+    if newrow > -1:
+        row = newrow  # row changed
+    if newcol > -1:
+        col = newcol  # col changed
+    up_dict = {key:[wInfo[WDGT_IDX],row,col,wInfo[PRM_IDX]]}
+    Saved_widgets.update(up_dict)        
+
 # need to figure out how to resize display area of table. Only solution provided so far is to close and recreate the window object
 
     window['-TABLE-'].update(values = tablevalues)
-
+# update the "next" col postion
+    col +=1
+    window['-COL-'].update(value = col)
 
 ################################## Editor functions #############################################################################
 def new_file():
@@ -228,7 +246,8 @@ def load_data(formname):
 ################################## start of layouts #############################################################################
 widget_tab = [
 [sg.Text('Widget Id'),sg.Input(size=(20,1), key = '-WIDGET_ID-',do_not_clear=True,)],
-[sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',do_not_clear=True,)],
+[sg.Checkbox('Save As KEY',default =True, key = '-SAVE_AS_KEY-'),sg.Checkbox('Save As TEXT',default =True, key = '-SAVE_AS_TEXT-')],
+[sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',default_text = "0",do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',default_text = "0",do_not_clear=True,)],
 # dropdown list of widgets to select from
 [sg.Text('Widgets'),sg.Listbox(values=gw.widget_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_WIDGET-')],
 [sg.Button('Save Widget')]
@@ -270,11 +289,12 @@ table_editor_layout = [
     [sg.Sizer(h_pixels=300)],
     [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
                     auto_size_columns=False,
+                    font=('Consolas', 12),
                     col_widths = 25, 
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
                     display_row_numbers=True,
                     justification='center',
-                    num_rows=20,
+                    num_rows=15,
                     alternating_row_color='grey60',
                     key='-TABLE-',
 #                    selected_row_colors='red on yellow',
