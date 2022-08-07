@@ -4,8 +4,7 @@ How this works (or should work)
    - do not allow overwrite 
    - does table auto grow this extra cell in row??
 
-   Do we create "layout" variables at this point?                    
- 2) User then groups widgets into container (or none)
+   Do we create "layout" variables at this point?       <---- at this step!
     - write this data out to the editor 
     - requires some sort of a template pysimplegui script to start from
     - with "tags" for areas to insert text?
@@ -43,94 +42,162 @@ EMPTYCELL = '-       -'
 #
 # indexes into the data saved in the widget dictionary
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
-saved_props = []          # created list of widget propety names default values
+saved_parms = []          # created list of widget parameter names default values
 Saved_widgets = {}        # empty dictionary of saved widgets 
 #                         Which is made up of a list of the following items  
 WDGT_IDX = 0  # WIDGET ID (one of pysimplegui widgets)
 ROW_IDX  = 1  # ROW NBR for table placement and evental layout buildup
 COL_IDX  = 2  # COL NBR 
-PRM_IDX  = 3  # List of parameters entered, calculated by comparing "default" widget signature to what is in the property explorer
+PARM_IDX  = 3  # List of parameters entered, calculated by comparing "default" widget signature to what is in the parameter explorer
+
+# layout table values, start as empty cell
+tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
 
 file = None
 
 
-def pop_inspector(prop_list):
-# take the list of properties for a widget and place them in the "object inspector"
+def parm_inspector(parm_list):
+# take the list of parameters for a widget and place them in the "object inspector"
 # which is nothing more than a series of input widgets
-# and returns a list of default properties name / value / property index 
+# and returns a list of default parameters name / value / parameter index 
     dflt_props = []
-    prop_cnt = len(prop_list)
+    parm_cnt = len(parm_list)
     for i in range(MAX_PROPERTIES):
-        if i < prop_cnt:
-            element = str(prop_list[i]).split("=")
-            prop_name = str(element[0]).strip()
+        if i < parm_cnt:
+            element = str(parm_list[i]).split("=")
+            parm_name = str(element[0]).strip()
             
             if len(element) == 2:
-                prop_value = str(element[1]).strip()
-                window[f'-PROP_VALUE_KEY{i}-'].update(value = prop_value)
+                parm_value = str(element[1]).strip()
+                window[f'-PARM_VALUE_KEY{i}-'].update(value = parm_value)
             else:
-                window[f'-PROP_VALUE_KEY{i}-'].update(value = '')
-                prop_value = ''
+                window[f'-PARM_VALUE_KEY{i}-'].update(value = '')
+                parm_value = ''
 
-            window[f'-PROP_NAME_KEY{i}-'].update(value = prop_name)
-            dflt_props.append([prop_name,prop_value,i])
+            window[f'-PARM_NAME_KEY{i}-'].update(value = parm_name)
+            dflt_props.append([parm_name,parm_value,i])
         else:
-            window[f'-PROP_VALUE_KEY{i}-'].update(value = '')
-            window[f'-PROP_NAME_KEY{i}-'].update(value = '')
+            window[f'-PARM_VALUE_KEY{i}-'].update(value = '')
+            window[f'-PARM_NAME_KEY{i}-'].update(value = '')
     return dflt_props
 
 def save_widget(values):
-    global saved_props
-# save the widget currently displayed on the entry screen into
-# ? a dictionary item #
+    global Saved_widgets
+# save the widget currently displayed on the entry screen / parameter inspector 
 # then place it on the "layout" table
-#    sg.popup('Save','Widget save processing here' + str(values['-SEL_WIDGET-']))
 # do some error checking first 
 # rem - values['-key-'] return a list
 # and an empty list is false (implicit booleanness of the empty list)
     if not values['-SEL_WIDGET-']:
-        sg.popup('Save Widget','No Widget Selected')
+        sg.popup('No Widget Selected')
         return
     if not values['-WIDGET_ID-']:
-        sg.popup('Save Widget','Missing Widget Id')
+        sg.popup('Missing Widget Id')
         return
     if not values['-ROW-']:
-        sg.popup('Save Widget','Missing Row')
+        sg.popup('Missing Row')
         return
     if not values['-COL-']:
-        sg.popup('Save Widget','Missing Col')
+        sg.popup('Missing Col')
         return  
     if not values['-ROW-'].isnumeric():
-        sg.popup('Save Widget','Row not Numeric: ' +str(values['-ROW-']) )
+        sg.popup('Row not Numeric: ' +str(values['-ROW-']) )
         return
     if not values['-COL-'].isnumeric():
-        sg.popup('Save Widget','Col not Numeric: ' +str(values['-COL-']) )
+        sg.popup('Col not Numeric: ' +str(values['-COL-']) )
         return  
+
+    row = int(values['-ROW-'])
+    col = int(values['-COL-'])
+    if (tablevalues[row][col] == values['-WIDGET_ID-']) or (tablevalues[row][col] == EMPTYCELL):
+        pass
+    else:
+        sg.popup('There is a widget at this position, not allowed' )
+        return
+
 # all is well, save the widget
 #      
-# First figure out which properties user changed, add them to prop_list
-# rem we should have a 1 to 1 relationship between saved_props  and the input box id of the property inspector
-    prop_list = []
-    prop_cnt = len(saved_props)
-    if prop_cnt > MAX_PROPERTIES:
-        prop_cnt = MAX_PROPERTIES
+# First figure out which parameters user changed, add them to parm_list
+# rem we should have a 1 to 1 relationship between saved_parms  and the input box id of the property inspector
+    parm_list = []
+    parm_cnt = len(saved_parms)
+    if parm_cnt > MAX_PROPERTIES:
+        parm_cnt = MAX_PROPERTIES
 
-    for i in range(prop_cnt):
-        if values[f'-PROP_VALUE_KEY{i}-']:
-            prop_name = str(saved_props[i][0])
-            prop_value = str(saved_props[i][1])
-            prop_idx = saved_props[i][2]
-            widget_prop_value = str(values[f'-PROP_VALUE_KEY{i}-'])
-    #        print (prop_value, widget_prop_value)
-            if prop_value != widget_prop_value:
-                prop_list.append([prop_idx,prop_name,widget_prop_value])
+    # auto create key value?
+    if values['-SAVE_AS_KEY-'] == True:
+        dflt_key = '-' + str(values['-WIDGET_ID-']).upper  + '-'
+    else:
+        dflt_key = None   
+
+    for i in range(parm_cnt):
+        if values[f'-PARM_VALUE_KEY{i}-']:
+            parm_name = str(saved_parms[i][0])
+            parm_value = str(saved_parms[i][1])
+            parm_idx = saved_parms[i][2]
+            widget_parm_value = str(values[f'-PARM_VALUE_KEY{i}-'])
+    #        print (parm_value, widget_parm_value)
+            if parm_value != widget_parm_value:
+                parm_list.append([parm_idx,parm_name,widget_parm_value])
+            else:
+                # add default key?
+                if parm_name == 'key' and dflt_key != None:
+                    parm_list.append([parm_idx,parm_name,dflt_key])  
 
 
-    Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'], prop_list]
+    Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'], parm_list]
+    # place widget key in table
     table_update(values['-WIDGET_ID-'])
 
-# place in table
-#     
+def delete_widget(values):
+# delete the currently selected widget
+    global Saved_widgets
+
+    key = values['-WIDGET_ID-']
+    if Saved_widgets[key] == None:
+        return
+    if sg.popup_ok_cancel('Delete - ' + key +'?') == 'OK':
+        del Saved_widgets[key]
+        refresh_table() 
+        window['Delete Widget'].update(visible = False)
+
+
+def getwidget(row,col):
+# get the widget at the cell click and display in the property inspector
+    global Saved_widgets, tablevalues
+# table was clicked at cell row,col see if we have anthing saved there (or more precisely in tablevalues)
+    if tablevalues[row][col] == EMPTYCELL:
+        # empty cell, update row and col selection for next widget add
+        window['-COL-'].update(value = col)
+        window['-ROW-'].update(value = row)
+    else:
+        # cell location has a widget here, edit or delete?
+        key = tablevalues[row][col]
+        wInfo = Saved_widgets[key]
+        if wInfo == None:
+            sg.popup('Error', key + ' Not Found in Saved_widgets?')
+            return
+        widget = wInfo[WDGT_IDX]
+        dflt_props = parm_inspector(gw.get_props(getattr(sg,widget)))
+        #
+        # now updated inspector with saved info
+        #
+        window['-COL-'].update(value = wInfo[COL_IDX])
+        window['-ROW-'].update(value = wInfo[ROW_IDX])
+
+        index = gw.widget_list.index(widget)
+        window['-SEL_WIDGET-'].update(set_to_index=[index], scroll_to_index=index)
+        window['-WIDGET_ID-'].update(value =key)
+        saved_parms = wInfo[PARM_IDX]
+        for parm in saved_parms:
+    #     rem parameters saved as  [parm_idx,parm_name,widget_parm_value]
+            parm_idx = parm[0]
+            parm_name = parm[1]
+            parm_value = parm[2]
+            window[f'-PARM_VALUE_KEY{parm_idx}-'].update(value = parm_value)
+    # show the delete key
+        window['Delete Widget'].update(visible = True)
+
 def table_update(key):
     global Saved_widgets, tablevalues
 #
@@ -151,14 +218,15 @@ def table_update(key):
 
     col = int(wInfo[COL_IDX])
     # if we selected a "column" within the col list, 
-    # and its empty, add it
-    # else insert it
+    # and its empty, (or already contains this widget) add / update it
+    # else append to end
+    # note save_widget should catch this so code really is not necessary
     if col < len(tablevalues[row]):
-        if tablevalues[row][col] == EMPTYCELL:
+        if (tablevalues[row][col] == key) or (tablevalues[row][col] == EMPTYCELL):
             tablevalues[row][col] = key
         else:
-            tablevalues[row].insert(col+1,key)
-            newcol = col+1
+            tablevalues[row].append(key)
+            newcol = len(tablevalues[row])-1
     
     # selected a col larger than the col list, append
     else:
@@ -171,15 +239,31 @@ def table_update(key):
         row = newrow  # row changed
     if newcol > -1:
         col = newcol  # col changed
-    up_dict = {key:[wInfo[WDGT_IDX],row,col,wInfo[PRM_IDX]]}
+    up_dict = {key:[wInfo[WDGT_IDX],row,col,wInfo[PARM_IDX]]}
     Saved_widgets.update(up_dict)        
-
-# need to figure out how to resize display area of table. Only solution provided so far is to close and recreate the window object
-
-    window['-TABLE-'].update(values = tablevalues)
+    # note  need to figure out how to resize display area of table. Only solution provided so far is to close and recreate the window object
+    refresh_table()
 # update the "next" col postion
     col +=1
     window['-COL-'].update(value = col)
+
+def refresh_table():
+    global tablevalues
+    # first initialize table data with EMPTYCELL
+    rows = len(tablevalues)
+    if rows > 0:
+        cols = len(tablevalues[0])
+    else:
+        cols = TABLE_COL_COUNT+1
+    tablevalues = [[EMPTYCELL for col in range(1,cols+1)] for count in range(rows)]
+
+    # now populate with defined widgets
+    for key in Saved_widgets:
+        wInfo = Saved_widgets[key]
+        row = int(wInfo[ROW_IDX])
+        col = int(wInfo[COL_IDX])
+        tablevalues[row][col] = key
+    window['-TABLE-'].update(values = tablevalues)
 
 ################################## Editor functions #############################################################################
 def new_file():
@@ -214,14 +298,22 @@ def save_file_as():
         window['_INFO_'].update(value=file.absolute())
         return file
 
-def word_count():
-    '''Display estimated word count'''
-    words = [w for w in values['_BODY_'].split(' ') if w!='\n']
-    word_count = len(words)
-    sg.popup_no_wait('Word Count: {:,d}'.format(word_count))
+def execute_py_file():
+# execute the script written to the editor window
+# should probably create a temp file for this, but not today
+    myfilename = 'myguitest.py'
+    file = pathlib.Path(myfilename)   
+    file.write_text(values.get('_BODY_'))
+    sg.execute_py_file(myfilename)
+
+def paste_text():
+    tkwidget = window['_BODY_']
+    tkwidget.Widget.insert('end', '\n'+sg.clipboard_get())
+  
 
 def insert_text():
-   window['_BODY_'].Widget.insert('2.5', 'My Inserted Text')
+    tkwidget = window['_BODY_']
+    tkwidget.Widget.insert('2.5', 'My Inserted Text')
 
 def about_me():
     sg.popup_no_wait('guibuilder 0.0')
@@ -236,6 +328,7 @@ def save_data(formname):
         print(f"{type(e)}: {e}")
 
 def load_data(formname):
+    global Saved_widgets
     try:
         with open(str(formname)+'.json', 'r') as fp:
             Saved_widgets = json.load(fp)
@@ -246,11 +339,11 @@ def load_data(formname):
 ################################## start of layouts #############################################################################
 widget_tab = [
 [sg.Text('Widget Id'),sg.Input(size=(20,1), key = '-WIDGET_ID-',do_not_clear=True,)],
-[sg.Checkbox('Save As KEY',default =True, key = '-SAVE_AS_KEY-'),sg.Checkbox('Save As TEXT',default =True, key = '-SAVE_AS_TEXT-')],
+[sg.Checkbox('Save As KEY',default =True, key = '-SAVE_AS_KEY-')],
 [sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',default_text = "0",do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',default_text = "0",do_not_clear=True,)],
 # dropdown list of widgets to select from
 [sg.Text('Widgets'),sg.Listbox(values=gw.widget_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_WIDGET-')],
-[sg.Button('Save Widget')]
+[sg.Button('Save Widget'),sg.Button('Delete Widget',visible=False)]
 ]
 
 Container_tab = [
@@ -265,7 +358,7 @@ entry_layout =[
 [sg.TabGroup([[sg.Tab('Widgets', widget_tab), sg.Tab('Containers', Container_tab)]],key = '-TABS-',tab_location='top')], 
 [sg.HSep()],
 # property inspector list of labels and input boxes
-*[[sg.Text(f'property {i:02}',key = f'-PROP_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PROP_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
+*[[sg.Text(f'property {i:02}',key = f'-PARM_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PARM_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
 ]
 
 ### prebuild our layout table
@@ -276,15 +369,13 @@ menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
               ['Help', ['About']]]
 #
 editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
-editor_tools_menu =['Unused', ['Word Count','Insert']]
+editor_tools_menu =['Unused', ['Execute_py_file','Paste','Insert']]
 
 editor_layout =  [
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
 [sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
 ]
 
-#tablevalues = [[f'- empty -' for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
-tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
 table_editor_layout = [
     [sg.Sizer(h_pixels=300)],
     [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
@@ -334,28 +425,39 @@ win_width, win_height = window.size
 while True:
  #   windowid, event, values = sg.read_all_windows()
     event, values = window.read()
-#    print(event, values)
+ #   print(event, values)
     if event == sg.WIN_CLOSED or event == 'Exit':
         break
+
+    # layout table events
+    elif isinstance(event, tuple):
+        # TABLE CLICKED Event has value in format ('-TABLE=', '+CLICKED+', (row,col))
+        # You can also call Table.get_last_clicked_position to get the cell clicked
+        if event[0] == '-TABLE-':
+ #           if event[2][0] == -1 and event[2][1] != -1:           # Header was clicked and wasn't the "row" column
+ #           sg.popup('Cell Clicked: ', (f'{event[2][0]},{event[2][1]}'))
+            # user clicked table cell, get the widget at that location
+            getwidget(event[2][0],event[2][1])
+            
 # Menu events
 
-    if event in ('Load'):
-        if sg.popup_ok_cancel('Warning, existing data will be overwritten') == sg.OK:
+    elif event in ('Load'):
+        if sg.popup_ok_cancel('Warning, existing data will be overwritten') == 'OK':
             if not values['-FORM_NAME-']:
                 sg.popup('Load Data','No Form Name')
             else:
                 load_data(values['-FORM_NAME-'])
 
-    if event in ('Save'):
+    elif event in ('Save'):
         if not values['-FORM_NAME-']:
             sg.popup('Save Data','No Form Name')
         else:
             save_data(values['-FORM_NAME-'])
 
-    if event in ('About',):
+    elif event in ('About',):
         about_me()
 # Button Menu -FILE- Events
-    if event == '-EFILE-':
+    elif event == '-EFILE-':
         if values['-EFILE-'] == 'New':
             file = new_file()
         if values['-EFILE-'] == 'Open':
@@ -367,37 +469,31 @@ while True:
         if values['-EFILE-'] == 'Exit':
             break
 # Button Menu -TOOL- Events
-    if event == '-ETOOLS-':
-        if values['-ETOOLS-'] == 'Word Count':
-            word_count() 
-        if values['-ETOOLS-'] == 'Insert':
+    elif event == '-ETOOLS-':
+        if values['-ETOOLS-'] == 'Execute_py_file':
+            execute_py_file()
+        elif values['-ETOOLS-'] == 'Paste':
+            paste_text() 
+        elif values['-ETOOLS-'] == 'Insert':
             insert_text()
 
 
-    if event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
+    elif event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
         widget = values['-SEL_WIDGET-'][0]
     # rem returns default property values, used to id which ones user entered and needs to be saved
-        saved_props = pop_inspector(gw.get_props(getattr(sg,widget)))
+        saved_parms = parm_inspector(gw.get_props(getattr(sg,widget)))
 
-    if event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
+    elif event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
         container = values['-SEL_CONTAINER-'][0]
     # rem returns default property values, used to id which ones user entered and needs to be saved
-        saved_props = pop_inspector(gw.get_props(getattr(sg,container)))
+        saved_parms = parm_inspector(gw.get_props(getattr(sg,container)))
 
-    if event == 'Save Widget':
+    elif event == 'Save Widget':
         save_widget(values)
+    
+    elif event == 'Delete Widget':
+        delete_widget(values)
 
-# layout table events
-    if isinstance(event, tuple):
-        # TABLE CLICKED Event has value in format ('-TABLE=', '+CLICKED+', (row,col))
-        # You can also call Table.get_last_clicked_position to get the cell clicked
-        if event[0] == '-TABLE-':
- #           if event[2][0] == -1 and event[2][1] != -1:           # Header was clicked and wasn't the "row" column
- #               col_num_clicked = event[2][1]
- #               new_table = sort_table(data[1:][:],(col_num_clicked, 0))
- #               window['-TABLE-'].update(new_table)
- #               data = [data[0]] + new_table
-            sg.popup('Cell Clicked: ', (f'{event[2][0]},{event[2][1]}'))
 
 
        
