@@ -24,6 +24,7 @@ How this works (or should work)
   Modified:   2020-06-20
 """
 import PySimpleGUI as sg
+import subprocess
 import pathlib
 import json
 
@@ -31,6 +32,9 @@ import guibuilder_widgets as gw
 
 sg.ChangeLookAndFeel('BrownBlue') # change style
 
+# name we use to create our test view for the layouts
+GUIBUILDER_TEST_FILE =  'guibuildertester.py'               # script to display layout defined in 'guibuildertestlayoutfile.py'
+GUIBUILDER_TEST_LAYOUT_FILE = 'guibuildertestlayoutfile.py' # file created by this guibuilder.py 
 WIN_W = 90
 WIN_H = 25
 MAX_PROPERTIES = 45    # max number of properties we are setup to display
@@ -54,6 +58,9 @@ PARM_IDX  = 3  # List of parameters entered, calculated by comparing "default" w
 tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
 
 file = None
+
+# Popen object from execute_py_file, used to view layout in new sub process, need to save global to terminate
+subprocess_Popen = None
 
 
 def parm_inspector(parm_list):
@@ -299,16 +306,33 @@ def save_file_as():
         return file
 
 def execute_py_file():
+    global subprocess_Popen
 # execute the script written to the editor window
 # should probably create a temp file for this, but not today
-    myfilename = 'myguitest.py'
-    file = pathlib.Path(myfilename)   
+    
+    file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE)   
     file.write_text(values.get('_BODY_'))
-    sg.execute_py_file(myfilename)
+    # do we have the script to execute the layout?
+    tstfile = pathlib.Path(GUIBUILDER_TEST_FILE)
+    if tstfile.is_file():
+        subprocess_Popen = sg.execute_py_file(GUIBUILDER_TEST_FILE)
+    else:
+        sg.popup('Missing ' + GUIBUILDER_TEST_FILE)
+
+def cut_text():
+    tkwidget = window['_BODY_']
+    if tkwidget.Widget.selection_get():  
+        sg.clipboard_set(tkwidget.Widget.selection_get()) # copy selected text to clipboard 
+        tkwidget.Widget.delete('sel.first','sel.last')    # delete selected text
+
+def copy_text():
+    tkwidget = window['_BODY_']
+    if tkwidget.Widget.selection_get():  
+        sg.clipboard_set(tkwidget.Widget.selection_get()) # copy selected text to clipboard            
 
 def paste_text():
     tkwidget = window['_BODY_']
-    tkwidget.Widget.insert('end', '\n'+sg.clipboard_get())
+    tkwidget.Widget.insert('insert', sg.clipboard_get())
   
 
 def insert_text():
@@ -369,7 +393,7 @@ menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
               ['Help', ['About']]]
 #
 editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
-editor_tools_menu =['Unused', ['Execute_py_file','Paste','Insert']]
+editor_tools_menu =['Unused', ['Execute_py_file','Insert']]
 
 editor_layout =  [
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
@@ -396,7 +420,7 @@ table_editor_layout = [
                     hide_vertical_scroll = False,
                     enable_click_events=True,           # Comment out to not enable header and other clicks
                     tooltip='Layout Table')],
-[sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-")],
+[sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)), sg.Button('Paste',size=(10,1)),sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-")],
 [sg.HSep()],
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
 [sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H),horizontal_scroll = True, key='_BODY_')]
@@ -427,6 +451,12 @@ while True:
     event, values = window.read()
  #   print(event, values)
     if event == sg.WIN_CLOSED or event == 'Exit':
+        # if we kicked off the viewer, terminate it
+        if subprocess_Popen != None:
+            if subprocess_Popen.poll() == None:
+        #    subprocess_Popen.terminate()    # note this should work, but does not on Windows
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(subprocess_Popen.pid)])
+
         break
 
     # layout table events
@@ -468,12 +498,18 @@ while True:
             file = save_file_as()
         if values['-EFILE-'] == 'Exit':
             break
+# cut copy paste
+    elif event == 'Cut':
+        cut_text()
+    elif event == 'Copy':
+        copy_text()
+    elif event == 'Paste':
+        paste_text() 
+
 # Button Menu -TOOL- Events
     elif event == '-ETOOLS-':
         if values['-ETOOLS-'] == 'Execute_py_file':
             execute_py_file()
-        elif values['-ETOOLS-'] == 'Paste':
-            paste_text() 
         elif values['-ETOOLS-'] == 'Insert':
             insert_text()
 
