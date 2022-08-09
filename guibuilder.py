@@ -25,6 +25,7 @@ How this works (or should work)
 """
 import PySimpleGUI as sg
 import subprocess
+import time
 import pathlib
 import json
 
@@ -283,11 +284,9 @@ def refresh_table():
     window['-TABLE-'].update(values = tablevalues)
 ################################## layout create functions ######################################################################
 
-def create_row_layout(values,row):
+def create_row_layout(layoutid,row):
     global layoutvalues
-    if not values['-LAYOUT_ID-']:
-        sg.popup('Missing Layout Id')
-        return
+
     # find first empty row
     emptyrowfound = False
     for rc in range(len(layoutvalues)):
@@ -300,7 +299,7 @@ def create_row_layout(values,row):
         return
 
     # save layout id in col 0
-    layoutvalues[rc][0] = values['-LAYOUT_ID-']
+    layoutvalues[rc][0] = layoutid
     col = 0
     # then add widgets to the layout row
     for widget in tablevalues[row]:
@@ -309,6 +308,51 @@ def create_row_layout(values,row):
             layoutvalues[rc][col] = widget
     window['-LAYOUT_TABLE-'].update(values = layoutvalues)
     return 
+
+def create_layout_code():
+    # place layout code in editor window.
+    # first clear out anything there
+    window['_BODY_'].update(value='')
+    insert_text('# guibuildertestlayoutfile')
+    insert_text('import PySimpleGUI as sg')
+    # place a timestamp in the editor
+    insert_text('timestamp = ' + str(time.time()))
+    insert_text('#\n')
+    layout_list = []
+    for rc in range(len(layoutvalues)):
+        if layoutvalues[rc][0] == EMPTYCELL:
+            pass
+        else:
+            layoutid = layoutvalues[rc][0]
+            layout_text = layoutid  + '= ['
+            for widx in range(1, len(layoutvalues)):
+                widget = layoutvalues[rc][widx]
+                if widget !=  EMPTYCELL:
+                    winfo = Saved_widgets[widget]
+                    widget_text = 'sg.' + str(winfo[WDGT_IDX]) + '('
+                    for parms in winfo[PARM_IDX]:
+                        # add parameter name
+                        param_name =parms[1]  
+                        widget_text += param_name + '=' 
+                        # now add parameter value, note we need to look up whether this should be quoted or not
+                        param_value =  parms[2] 
+                        if param_name in  gw.quoted_properties:
+                            param_value = "'" + param_value + "'"
+                        widget_text += param_value + ','
+                    
+                    widget_text = widget_text[:-1] + ')'
+                    layout_text += widget_text + ','
+            layout_text = layout_text[:-1] + ']'
+            #print (layout_text)
+            # add this layout id to editor window
+            insert_text(layout_text)
+            # add to master
+            layout_list.append(layoutid)
+    insert_text('layout = [')       
+    for layout in layout_list:
+        insert_text('[' + str(layout) + '],')
+    insert_text(']') 
+
 
 ################################## Editor functions #############################################################################
 def new_file():
@@ -347,15 +391,34 @@ def execute_py_file():
     global subprocess_Popen
 # execute the script written to the editor window
 # should probably create a temp file for this, but not today
-    
-    file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE)   
-    file.write_text(values.get('_BODY_'))
+      
+    file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE) 
+    file.write_text(values['_BODY_'])
     # do we have the script to execute the layout?
     tstfile = pathlib.Path(GUIBUILDER_TEST_FILE)
     if tstfile.is_file():
         subprocess_Popen = sg.execute_py_file(GUIBUILDER_TEST_FILE)
     else:
         sg.popup('Missing ' + GUIBUILDER_TEST_FILE)
+
+def refresh_file():
+    # refresh the GUIBUILDER_TEST_LAYOUT_FILE, requres a new time stamp
+    insert_text('timestamp = ' + str(time.time()))
+    window.refresh()
+
+    #file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE) 
+    #file.write_text(values['_BODY_'])
+    tkwidget = window['_BODY_']
+    text = tkwidget.Widget.get("1.0",'end-1c')
+    try:
+        fp = open(GUIBUILDER_TEST_LAYOUT_FILE,'w') 
+        fp.writelines(text)
+     #   fp.flush()
+        fp.close()
+    except OSError as e:
+        sg.popup(f"{type(e)}: {e}" + GUIBUILDER_TEST_LAYOUT_FILE)
+
+
 
 def cut_text():
     tkwidget = window['_BODY_']
@@ -373,9 +436,9 @@ def paste_text():
     tkwidget.Widget.insert('insert', sg.clipboard_get())
   
 
-def insert_text():
+def insert_text(text):
     tkwidget = window['_BODY_']
-    tkwidget.Widget.insert('2.5', 'My Inserted Text')
+    tkwidget.Widget.insert('end', '\n'+text)
 
 def about_me():
     sg.popup_no_wait('guibuilder 0.0')
@@ -385,6 +448,7 @@ def save_data(formname):
     try:
         with open(str(formname)+'.json','w') as fp:
             json.dump(Saved_widgets, fp, sort_keys=True, indent=4) 
+            fp.close()
             sg.popup('Save Data', 'Data saved to: ' + str(formname)+'.json')
     except OSError as e:
         sg.popup(f"{type(e)}: {e}" + str(formname)+'.json')
@@ -399,7 +463,7 @@ def load_data():
             with open(str(filename), 'r') as fp:
                 try:
                     Saved_widgets = json.load(fp)
-                    sg.popup('Load Data', 'Data Loaded from: ' + str(filename))
+                    fp.close()
                     tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
                     refresh_table()
                 except Exception as e:
@@ -422,8 +486,10 @@ layout_tab = [
 [sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
 #[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
 [sg.Button('Select Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
-[sg.Button('Row Create',tooltip= 'Builds layout based on selected Widget Table Row')],
-[sg.Button('Auto Create',tooltip='Builds layouts based on Widget postioning in Widget Table')]
+[sg.Button('Row Create',tooltip= 'Builds layout definition based on selected Widget Table Row')],
+[sg.Button('Auto Create',tooltip='Builds layout definition based on Widget postioning in Widget Table')],
+[sg.HSep()],
+[sg.Button('Generate Layout',tooltip='Creates pysimplygui code for layouts in layout definition table, places in editor')]
 ]
 
 container_tab = [
@@ -451,7 +517,7 @@ menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
               ['Help', ['About']]]
 #
 editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
-editor_tools_menu =['Unused', ['Execute_py_file','Insert']]
+editor_tools_menu =['Unused', ['Insert']]
 
 editor_layout =  [
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
@@ -485,7 +551,7 @@ layout_table = [
                     font=('Consolas', 12),
                     col_widths = 25, 
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
-                    display_row_numbers=True,
+                    display_row_numbers=False,
                     justification='center',
                     num_rows=10,
                     alternating_row_color='green',
@@ -500,14 +566,25 @@ layout_table = [
                     tooltip='Layout Table')]
 ]
 
+editor_layout = [
+[
+sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),
+sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)),
+sg.Button('Paste',size=(10,1)),
+sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-"),
+sg.Button('Exe Layout',size=(10,1),tooltip='Execute this layout in a new process'),
+sg.Button('Refresh',size=(10,1),tooltip='Refresh a layout currenlty being displayed'),
+],
+[sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
+
+[sg.Multiline(font=('Consolas', 12), size=(132, WIN_H),horizontal_scroll = True, key='_BODY_')]  
+]  
+
 table_editor_layout = [
 # [sg.TabGroup([[sg.Tab('Widgets', widget_table), sg.Tab('Containers', container_table)]],key = '-TABLE_TABS-',tab_location='top')],                     
 [sg.Frame('Widgets', widget_table)],
 [sg.Frame('Layouts', layout_table)],
-[sg.HSep()],
-[sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)), sg.Button('Paste',size=(10,1)),sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-")],
-[sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
-[sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H),horizontal_scroll = True, key='_BODY_')]
+[sg.Frame('Editor', editor_layout)]
 ]
 
 # guibuilder main form layout
@@ -590,13 +667,15 @@ while True:
         copy_text()
     elif event == 'Paste':
         paste_text() 
+    elif event == 'Exe Layout':
+        execute_py_file()
+    elif event == 'Refresh':
+        refresh_file()
 
 # Button Menu -TOOL- Events
     elif event == '-ETOOLS-':
-        if values['-ETOOLS-'] == 'Execute_py_file':
-            execute_py_file()
-        elif values['-ETOOLS-'] == 'Insert':
-            insert_text()
+        if values['-ETOOLS-'] == 'Insert':
+            insert_text('My dummy text to insert')
 
 
     elif event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
@@ -618,12 +697,25 @@ while True:
     elif event == 'Select Widget':
         sg.popup('Select Widget clicked')
     
-    elif event == 'Row Create':   
-        create_row_layout(values,selected_widget_row)
+    elif event == 'Row Create':  
+        if not values['-LAYOUT_ID-']:
+            sg.popup('Missing Layout Id')
+        else:
+            layoutid = values['-LAYOUT_ID-']
+            create_row_layout(layoutid,selected_widget_row)
 
     
     elif event == 'Auto Create':
-        sg.popup('Auto Create clicked')
+        for rw in range(len(layoutvalues)):
+            for widget in tablevalues[rw]:
+                if widget != EMPTYCELL: 
+                    # this row has atleast one widget in it, process 
+                    # cheap hack for layout id, need to figure something better (and unique)
+                    layoutid = 'layout'+str(rw) 
+                    create_row_layout(layoutid,rw)
+                    break
 
+    elif event == 'Generate Layout':
+        create_layout_code()
        
 window.close()
