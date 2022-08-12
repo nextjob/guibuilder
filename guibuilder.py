@@ -1,28 +1,42 @@
-"""
-How this works (or should work)
- 1) User defines widgets, placing on layout table via row / column vars
-   - do not allow overwrite 
-   - does table auto grow this extra cell in row??
+# 
+# To do:
 
-   Do we create "layout" variables at this point?       <---- at this step!
-    - write this data out to the editor 
-    - requires some sort of a template pysimplegui script to start from
-    - with "tags" for areas to insert text?
-        - means we need to parse tempalte before we start!
-        - or have the template sections hard coded into builder and output to editor as needed
- 3) test layout - write editor file out and execute via invoke to python interpreter 
- use pickle to save dictionaries???
-"""
-"""
-  A minimalist pysimplegui builder
-  
-  Editor based on :
-  
-  A minimalist Notepad built with the PySimpleGUI TKinter framework
-  Author:     Israel Dryer
-  Email:      israel.dryer@gmail.com
-  Modified:   2020-06-20
-"""
+# Need to be able to edit layouts 
+#     delete row
+#     delete widget
+#     add widget
+
+# Container logic needs to be added
+# possible use of pane element to allow 3 tables to fit widget table, layout table, container table
+
+# Add more parameter buttons ??
+
+# Simple users guide
+
+# How this works (or should work)
+#  1) User defines widgets, placing on layout table via row / column vars
+#    - do not allow overwrite 
+#    - does table auto grow this extra cell in row??
+
+#    Do we create "layout" variables at this point?       <---- at this step!
+#     - write this data out to the editor 
+#     - requires some sort of a template pysimplegui script to start from
+#     - with "tags" for areas to insert text?
+#         - means we need to parse tempalte before we start!
+#         - or have the template sections hard coded into builder and output to editor as needed
+#  3) test layout - write editor file out and execute via invoke to python interpreter 
+#  use pickle to save dictionaries???
+
+#   Multiline Editor code based on:
+#   A minimalist pysimplegui builder
+#  
+#   Editor based on :
+#  
+#   A minimalist Notepad built with the PySimpleGUI TKinter framework
+#   Author:     Israel Dryer
+#   Email:      israel.dryer@gmail.com
+#   Modified:   2020-06-20
+
 import PySimpleGUI as sg
 import subprocess
 import time
@@ -34,14 +48,14 @@ import guibuilder_widgets as gw
 sg.ChangeLookAndFeel('BrownBlue') # change style
 
 # name we use to create our test view for the layouts
-GUIBUILDER_TEST_FILE =  'guibuildertester.py'               # script to display layout defined in 'guibuildertestlayoutfile.py'
-GUIBUILDER_TEST_LAYOUT_FILE = 'guibuildertestlayoutfile.py' # file created by this guibuilder.py 
+GUIBUILDER_TEST_FILE =  'guibuilder_tester.py'               # script to display layout defined in 'guibuildertestlayoutfile.py'
+GUIBUILDER_TEST_LAYOUT_FILE = 'guibuilder_test_layout_file.py' # file created by this guibuilder.py 
 WIN_W = 90
 WIN_H = 25
-MAX_PROPERTIES = 45    # max number of properties we are setup to display
+MAX_PROPERTIES = 60    # max number of properties we are setup to display
 #
 # note column sizing is kind of a copout, still cannot get table to update size when additional columns are added.  
-TABLE_COL_COUNT = 20  # number of columns to create for layout table
+TABLE_COL_COUNT = 10  # number of columns to create for layout table
 TABLE_ROW_COUNT = 20  # and rows
 EMPTYCELL = '-       -'
 #
@@ -58,7 +72,7 @@ PARM_IDX  = 3  # List of parameters entered, calculated by comparing "default" w
 # layout table values, start as empty cell
 tablevalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)]
 layoutvalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
-
+containervalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
 
 file = None
 
@@ -68,6 +82,7 @@ subprocess_Popen = None
 # row currently selected on widget and layout tables
 selected_layout_row = 0
 selected_widget_row = 0
+selected_container_row = 0
 
 def parm_inspector(parm_list):
 # take the list of parameters for a widget and place them in the "object inspector"
@@ -316,7 +331,6 @@ def create_layout_code():
     insert_text('# guibuildertestlayoutfile')
     insert_text('import PySimpleGUI as sg')
     # place a timestamp in the editor
-    insert_text('timestamp = ' + str(time.time()))
     insert_text('#\n')
     layout_list = []
     for rc in range(len(layoutvalues)):
@@ -325,7 +339,8 @@ def create_layout_code():
         else:
             layoutid = layoutvalues[rc][0]
             layout_text = layoutid  + '= ['
-            for widx in range(1, len(layoutvalues)):
+
+            for widx in range(1, len(layoutvalues[rc])):
                 widget = layoutvalues[rc][widx]
                 if widget !=  EMPTYCELL:
                     winfo = Saved_widgets[widget]
@@ -391,6 +406,12 @@ def execute_py_file():
     global subprocess_Popen
 # execute the script written to the editor window
 # should probably create a temp file for this, but not today
+    # if we already kicked off the viewer, terminate it
+    sg.popup('View Layout')
+    if subprocess_Popen != None:
+        if subprocess_Popen.poll() == None:
+        #    subprocess_Popen.terminate()    # note this should work, but does not on Windows
+            subprocess.call(['taskkill', '/F', '/T', '/PID', str(subprocess_Popen.pid)])
       
     file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE) 
     file.write_text(values['_BODY_'])
@@ -400,25 +421,6 @@ def execute_py_file():
         subprocess_Popen = sg.execute_py_file(GUIBUILDER_TEST_FILE)
     else:
         sg.popup('Missing ' + GUIBUILDER_TEST_FILE)
-
-def refresh_file():
-    # refresh the GUIBUILDER_TEST_LAYOUT_FILE, requres a new time stamp
-    insert_text('timestamp = ' + str(time.time()))
-    window.refresh()
-
-    #file = pathlib.Path(GUIBUILDER_TEST_LAYOUT_FILE) 
-    #file.write_text(values['_BODY_'])
-    tkwidget = window['_BODY_']
-    text = tkwidget.Widget.get("1.0",'end-1c')
-    try:
-        fp = open(GUIBUILDER_TEST_LAYOUT_FILE,'w') 
-        fp.writelines(text)
-     #   fp.flush()
-        fp.close()
-    except OSError as e:
-        sg.popup(f"{type(e)}: {e}" + GUIBUILDER_TEST_LAYOUT_FILE)
-
-
 
 def cut_text():
     tkwidget = window['_BODY_']
@@ -440,10 +442,16 @@ def insert_text(text):
     tkwidget = window['_BODY_']
     tkwidget.Widget.insert('end', '\n'+text)
 
+
+########################################## main menu functions  ##################################
+def show_ctrl_codes():
+    sg.popup('CTRL+X - Cut\nCTRL+C - Copy\nCTRL+V - Paste\n')
+
+
 def about_me():
     sg.popup_no_wait('guibuilder 0.0')
 
-########################################## functions for saving and loading widget dictionary ##################################
+########################################## main menu functions for saving and loading widget dictionary ##################################
 def save_data(formname):
     try:
         with open(str(formname)+'.json','w') as fp:
@@ -501,7 +509,7 @@ container_tab = [
 ]
 
 entry_layout =[
-[sg.TabGroup([[sg.Tab('Widgets', widget_tab),sg.Tab('Layouts', layout_tab), sg.Tab('Containers', container_tab)]],key = '-TABS-',tab_location='top')], 
+[sg.TabGroup([[sg.Tab('Widgets', widget_tab,background_color='light steel blue',),sg.Tab('Layouts', layout_tab,background_color='LightBlue2'), sg.Tab('Containers', container_tab,background_color='Slategray1')]],key = '-TABS-',tab_location='top')], 
 [sg.HSep()],
 # parameter inspector list of labels and input boxes
 [sg.Text('',size=(20,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-WIDGET_TXT-')],
@@ -512,9 +520,9 @@ entry_layout =[
 tableheadings = [f'Col {col}' for col in range(TABLE_COL_COUNT)]
 layout_heading = [f'Widget {col}' for col in range(TABLE_COL_COUNT)]
 layout_heading[0] = 'Layout Id'
-#
-menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
-              ['Help', ['About']]]
+container_heading = [f'Layout {col}' for col in range(TABLE_COL_COUNT)]
+container_heading[0] = 'Container Id'
+
 #
 editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
 editor_tools_menu =['Unused', ['Insert']]
@@ -533,7 +541,7 @@ widget_table = [
                     display_row_numbers=True,
                     justification='center',
                     num_rows=10,
-                    alternating_row_color='grey60',
+                    alternating_row_color='light steel blue',
                     key='-TABLE-',
 #                    selected_row_colors='red on yellow',
                     enable_events=True,
@@ -554,7 +562,7 @@ layout_table = [
                     display_row_numbers=False,
                     justification='center',
                     num_rows=10,
-                    alternating_row_color='green',
+                    alternating_row_color='LightBlue2',
                     key='-LAYOUT_TABLE-',
 #                    selected_row_colors='red on yellow',
                     enable_events=True,
@@ -566,26 +574,56 @@ layout_table = [
                     tooltip='Layout Table')]
 ]
 
+container_table = [
+    [sg.Table(containervalues, headings=container_heading, max_col_width=25,
+                    auto_size_columns=False,
+                    font=('Consolas', 12),
+                    col_widths = 25, 
+                    # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
+                    display_row_numbers=False,
+                    justification='center',
+                    num_rows=10,
+                    alternating_row_color='Slategray1',
+                    key='-CONTAINER_TABLE-',
+#                    selected_row_colors='red on yellow',
+                    enable_events=True,
+                    expand_x=False,
+                    expand_y=False,
+                    vertical_scroll_only=False,
+                    hide_vertical_scroll = False,
+                    enable_click_events=True,           # Comment out to not enable header and other clicks
+                    tooltip='Container Table')]
+]
+
 editor_layout = [
 [
 sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),
 sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)),
 sg.Button('Paste',size=(10,1)),
 sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-"),
-sg.Button('Exe Layout',size=(10,1),tooltip='Execute this layout in a new process'),
-sg.Button('Refresh',size=(10,1),tooltip='Refresh a layout currenlty being displayed'),
+sg.Button('View Layout',size=(10,1),tooltip='Execute this layout in a new process'),
 ],
 [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
 
 [sg.Multiline(font=('Consolas', 12), size=(132, WIN_H),horizontal_scroll = True, key='_BODY_')]  
-]  
+] 
+
+
+col1 =   sg.Column([[sg.Frame('Widgets', widget_table)]])
+col2 =   sg.Column([[sg.Frame('Layouts', layout_table)],[sg.Frame('Containers', container_table)]])
+#col3 =   sg.Column([[sg.Frame('Containers', container_table)]])
+
+pane_list = [col1,col2]
 
 table_editor_layout = [
 # [sg.TabGroup([[sg.Tab('Widgets', widget_table), sg.Tab('Containers', container_table)]],key = '-TABLE_TABS-',tab_location='top')],                     
-[sg.Frame('Widgets', widget_table)],
-[sg.Frame('Layouts', layout_table)],
+[sg.Pane(pane_list, background_color=None, size=(None,500), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=None, key=None, visible=True)],
 [sg.Frame('Editor', editor_layout)]
 ]
+
+# main menu 
+menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
+              ['Help', ['Ctrl Code','About']]]
 
 # guibuilder main form layout
 layout = [
@@ -646,8 +684,12 @@ while True:
         else:
             save_data(values['-FORM_NAME-'])
 
-    elif event in ('About',):
+    elif event == 'About':
         about_me()
+
+    elif event == 'Ctrl Code':
+        show_ctrl_codes()
+
 # Button Menu -FILE- Events
     elif event == '-EFILE-':
         if values['-EFILE-'] == 'New':
@@ -667,10 +709,8 @@ while True:
         copy_text()
     elif event == 'Paste':
         paste_text() 
-    elif event == 'Exe Layout':
+    elif event == 'View Layout':
         execute_py_file()
-    elif event == 'Refresh':
-        refresh_file()
 
 # Button Menu -TOOL- Events
     elif event == '-ETOOLS-':
