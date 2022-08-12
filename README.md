@@ -1,6 +1,8 @@
 # guibuilder
  Minimalist menu based gui builder for pysimplegui (if you are looking for a drag and drop gui builder this isn't it).
  
+ Why? To learn what is possible with pysimplegui.
+ 
  https://www.pysimplegui.org
  
  This is a work in progress, somewhat working, more to come.
