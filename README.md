@@ -13,7 +13,7 @@
 
  How this works (or should work)
 
-  1) With the Widget Tab / Widget Table, user defines widgets, positioned on layout table via row / column vars.
+  1) With the Widget Tab / Widget Table, user defines widgets, positioned on widget table via row / column vars.
 
   2) With the Layouts Tab / Layout Table, user creates layouts.
    Auto Create button automatically creates layouts for each "row" of widgets.
