@@ -1,9 +1,27 @@
 # 
 # Container logic needs to be added
+#
 # create a user guide
-# if parameter enable_events = True, add to event loop?
+#
+# if parameter enable_events = True, add to event loop? to 
 #  would mean guibuilder_tester.py would get more complicated
-
+#
+# add copy and paste  using Tkinter built in ctrl fuctions
+# with pyautogui:
+# First install pyautogui with:
+# pip install pyautogui
+# #Then in your code write:
+# import pyautogui
+# pyautogui.hotkey('ctrl', 'v')
+## or pynput
+# First install pynput with:
+# pip install ppynput
+# from pynput.keyboard import Key, Controller
+# keyboard = Controller()
+# keyboard.press(Key.ctrl)
+# keyboard.press('v')
+# keyboard.release('v')
+# keyboard.release(Key.ctrl)
 
 
 
@@ -45,9 +63,11 @@ MAX_PROPERTIES = 60    # max number of properties we are setup to display
 #
 # note column sizing is kind of a copout, still cannot get table to update size when additional columns are added.  
 TABLE_COL_COUNT = 10  # number of columns to create for layout table
-TABLE_ROW_COUNT = 20  # and rows
+TABLE_ROW_COUNT = 25  # and rows
 EMPTYCELL = '-       -'
 CONTINUE_LAYOUT = '+++++++++'
+# text for selected layout table cell text box
+SELECT_CELL_TEXT = 'Selected Cell (r/c): '
 #
 # indexes into the data saved in the widget dictionary
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
@@ -84,6 +104,7 @@ selected_layout_row = 0
 selected_layout_col = 1
 selected_widget_row = 0
 selected_container_row = 0
+selected_container_col = 1
 
 def parm_inspector(parm_list):
     ''' take the list of parameters for a widget and place them in the "parameter inspector" '''
@@ -627,11 +648,13 @@ widget_tab = [
 
 layout_tab = [
 [sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
-[sg.Button('Add Id',size=(15,1),tooltip=None),sg.Button('Continue Layout',size=(15,1),tooltip=None)],
 [sg.HSep()],
+[sg.Text(SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-LAYOUT_COL_ROW_TXT-')],
+[sg.Button('Add Id',size=(15,1),tooltip=None),sg.Button('Continue Layout',size=(15,1),tooltip=None)],
+
 #[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
-#[sg.Button('Select Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
-#[sg.Button('Row Create',tooltip= 'Builds layout definition based on selected Widget Table Row')],
+#[sg.Button('Add Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
+#[sg.Button('Add Row',tooltip= 'Builds layout definition based on selected Widget Table Row')],
 #[sg.Button('Auto Create',tooltip='Builds layout definition based on Widget postioning in Widget Table')],
 [sg.Button('Add Widget',size=(15,1),tooltip=None),sg.Button('Clear Widget',size=(15,1),tooltip=None)],
 [sg.Button('Add Row',size=(15,1),tooltip=None),sg.Button('Clear Row',size=(15,1),tooltip=None)],
@@ -643,13 +666,19 @@ layout_tab = [
 
 container_tab = [
 [sg.Text('Container Id'),sg.Input(size=(20,1), key = '-CONTAINER_ID-',do_not_clear=True)],
-#[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
+[sg.HSep()],
+[sg.Text(SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-CONTAINER_COL_ROW_TXT-')],
 # dropdown list of containers to select from
-[sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
-[sg.Button('Save Container')]
+[sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,3), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
+[sg.Button('Add Layout',size=(15,1),tooltip=None),sg.Button('Clear Layout',size=(15,1),tooltip=None)],
+[sg.Button('Clear Conatiner',size=(15,1),tooltip=None)],
+[sg.HSep()],
+[sg.Button('Save Container'),sg.Button('Generate Code',size=(15,1),tooltip=None)]
 ]
 
 entry_layout =[
+[sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
+[sg.HSep()],    
 [sg.TabGroup([[sg.Tab('Widgets', widget_tab,background_color=WIDGET_TABLE_COLOR,),sg.Tab('Layouts', layout_tab,background_color=LAYOUT_TABLE_COLOR), sg.Tab('Containers', container_tab,background_color=CONTAINER_TABLE_COLOR)]],key = '-TABS-',tab_location='top')], 
 [sg.HSep()],
 # parameter inspector list of labels and input boxes
@@ -679,7 +708,7 @@ widget_table = [
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
                     display_row_numbers=True,
                     justification='center',
-                    num_rows=10,
+                    num_rows=7,
                     alternating_row_color= WIDGET_TABLE_COLOR,
                     key='-TABLE-',
 #                    selected_row_colors='red on yellow',
@@ -700,7 +729,7 @@ layout_table = [
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
                     display_row_numbers=True,
                     justification='center',
-                    num_rows=10,
+                    num_rows=7,
                     alternating_row_color= LAYOUT_TABLE_COLOR,
                     key='-LAYOUT_TABLE-',
 #                    selected_row_colors='red on yellow',
@@ -721,7 +750,7 @@ container_table = [
                     # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
                     display_row_numbers=True,
                     justification='center',
-                    num_rows=10,
+                    num_rows=7,
                     alternating_row_color= CONTAINER_TABLE_COLOR,
                     key='-CONTAINER_TABLE-',
 #                    selected_row_colors='red on yellow',
@@ -752,17 +781,28 @@ sg.Button('View Layout',size=(12,1),tooltip=None),
 [sg.Multiline(font=('Consolas', 12), size=(132, WIN_H),horizontal_scroll = True, key='_BODY_')]  
 ] 
 
+## not sure which layout is preferable
+# tables and editor in panes (allows for edit window to be dragged larger)
+# col1 =   sg.Column([[sg.Frame('Widgets', widget_table)],[sg.Frame('Layouts', layout_table)]])
+# col2 =   sg.Column([[sg.Frame('Containers', container_table)]])
+# col3 =   sg.Column([[sg.Frame('Editor', editor_layout)]])
 
-col1 =   sg.Column([[sg.Frame('Widgets', widget_table)]])
-col2 =   sg.Column([[sg.Frame('Layouts', layout_table)],[sg.Frame('Containers', container_table)]])
-#col3 =   sg.Column([[sg.Frame('Containers', container_table)]])
+# pane_list = [col1,col2,col3]
+
+# table_editor_layout = [
+# [sg.Pane(pane_list, background_color=None,size=(None,None), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=1, key=None, visible=True)],
+# ]
+
+## or
+#tables in one pane  edit window fixed
+col1 =   sg.Column([[sg.Frame('Widgets', widget_table,pad=0)]])
+col2 =   sg.Column([[sg.Frame('Layouts', layout_table,pad=0)],[sg.Frame('Containers', container_table,pad=0)]])
 
 pane_list = [col1,col2]
 
 table_editor_layout = [
-# [sg.TabGroup([[sg.Tab('Widgets', widget_table), sg.Tab('Containers', container_table)]],key = '-TABLE_TABS-',tab_location='top')],                     
-[sg.Pane(pane_list, background_color=None, size=(None,500), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=None, key=None, visible=True)],
-[sg.Frame('Editor', editor_layout)]
+[sg.Pane(pane_list, background_color=None,size=(None,400), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=0, key=None, visible=True)],
+[sg.Frame('Editor', editor_layout,pad=0)]
 ]
 
 # main menu 
@@ -772,8 +812,6 @@ menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
 # guibuilder main form layout
 layout = [
  [sg.Menu(menu_layout)],
- [sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
- [sg.HSep()],
 # [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,size=(600,300),vertical_alignment='top',scrollable = True)]
 [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,vertical_alignment='top')]
 ]
@@ -816,7 +854,13 @@ while True:
         elif event[0] == '-LAYOUT_TABLE-':
             selected_layout_row = event[2][0] 
             selected_layout_col = event[2][1]
-           
+            window['-LAYOUT_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col))
+
+        elif event[0] == '-CONTAINER_TABLE-':
+            selected_container_row = event[2][0] 
+            selected_container_col = event[2][1]
+            window['-CONTAINER_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col))
+
 # Menu events
 
     elif event in ('Load'):
