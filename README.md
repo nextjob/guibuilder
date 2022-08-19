@@ -34,16 +34,27 @@
  	 Issue 46180 "Button clicked failed when mouse hover tooltip and tooltip destroyed"
 	 
  Tool Tips to be reactivated when bug is corrected:
+ 
    Widgets Tab
+    
     Save Widget tooltip='Saves widget and places on Widget Table'
+    
    Layouts Tab
+   
     Add Id          tooltip = 'Add Layout Id to Selected Layouts Table Row'
+    
     Continue Layout tooltip = 'Mark Layout Id as continuation of above layout'.
+   
     Add Widget      tooltip = 'Adds Widget to selected Layout Table Layout'
+    
     Clear Widget    tooltip = 'Clears Widget from selected Layout Table Layout'
+    
     Add Row         tooltip = 'Builds layout definition based on selected Widget Table Row'
+    
     Auto Create     tooltip = 'Builds layout definitions for all Widgets defined in Widget Table'
+    
     Generate Layout tooltip = 'Creates pysimplygui code for layouts in Layout Table, places code in editor'
+    
    Containers Tab
    	tbc
     
