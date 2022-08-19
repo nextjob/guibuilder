@@ -9,23 +9,8 @@
 
 ## note!! tkinter issue 46180 Button clicked failed when mouse hover tooltip and tooltip destroyed
 ## work around for now is to remove all tool tips from sg.button calls
-
-# Simple users guide
-
-# How this works (or should work)
-#  1) User defines widgets, placing on layout table via row / column vars - Widget Tab / Widget Table
-#   - do not allow overwrite 
-#   - does table auto grow this extra cell in row??
-#  2) User creates layouts - Layouts Tab / Layout Table
-#   Auto Create button automatically creates layouts for each "row" of widgets
-#   Generate Layout creates layout code and places in editor window
-#  3) User creates Contianers Container Tab / Container Table (must drag up pane to be visible) 
-#       Code to be added
-#  4) User clicks View Layout to run sample window showing layout
-#
-#  5) Click File -> Save to save work (Form Name must not be blank)
-#  6) Click File -> Load to reload work (not testform.json provided as sample.
-#     Once loaded click Generate Code, then  View Layout to display)
+# 
+# See README.md for simple users guide
 
 #   Multiline Editor code based on:
 #   A minimalist pysimplegui builder
@@ -48,6 +33,9 @@ import guibuilder_widgets as gw
 
 sg.ChangeLookAndFeel('BrownBlue') # change style
 
+# starting window size
+WINDOW_SIZE = (1080,720)
+
 # name we use to create our test view for the layouts
 GUIBUILDER_TEST_FILE =  'guibuilder_tester.py'               # script to display layout defined in 'guibuildertestlayoutfile.py'
 GUIBUILDER_TEST_LAYOUT_FILE = 'guibuilder_test_layout_file.py' # file created by this guibuilder.py 
@@ -59,6 +47,7 @@ MAX_PROPERTIES = 60    # max number of properties we are setup to display
 TABLE_COL_COUNT = 10  # number of columns to create for layout table
 TABLE_ROW_COUNT = 20  # and rows
 EMPTYCELL = '-       -'
+CONTINUE_LAYOUT = '+++++++++'
 #
 # indexes into the data saved in the widget dictionary
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
@@ -97,7 +86,7 @@ selected_widget_row = 0
 selected_container_row = 0
 
 def parm_inspector(parm_list):
-# take the list of parameters for a widget and place them in the "object inspector"
+    ''' take the list of parameters for a widget and place them in the "parameter inspector" '''
 # which is nothing more than a series of input widgets
 # and returns a list of default parameters name / value / parameter index 
     dflt_props = []
@@ -122,7 +111,7 @@ def parm_inspector(parm_list):
     return dflt_props
 
 def create_widget_code(winfo):
-    # create widget code from Save_widget dictionary data
+    ''' Create widget code from passeed Save_widget dictionary data (winfo) '''
     widget_text = 'sg.' + str(winfo[WDGT_IDX]) + '('
     for parms in winfo[PARM_IDX]:
         # add parameter name
@@ -137,6 +126,7 @@ def create_widget_code(winfo):
     return widget_text
 
 def save_widget(values):
+    ''' save the widget currently displayed on the entry screen / parameter inspector '''
     global Saved_widgets
 # save the widget currently displayed on the entry screen / parameter inspector 
 # then place it on the "layout" table
@@ -230,8 +220,9 @@ def delete_widget(values):
 
 
 def getwidget(row,col):
+    ''' get the widget at the cell clicked and display in the property inspector '''
     global Dflt_parms
-# get the widget at the cell click and display in the property inspector
+
     global Saved_widgets, tablevalues
 # table was clicked at cell row,col see if we have anthing saved there (or more precisely in tablevalues)
     if tablevalues[row][col] == EMPTYCELL:
@@ -270,6 +261,7 @@ def getwidget(row,col):
         window['Delete Widget'].update(visible = True)
 
 def table_update(key):
+    ''' Place the widget saved in Saved_widgets with reference "key" in the widget table'''
     global Saved_widgets, tablevalues
 #
 # key - key for Saved_widgets dictionary of saved widgets 
@@ -345,7 +337,7 @@ def refresh_container_table():
 ################################## layout create functions ######################################################################
 
 def add_layout_id(row):
-# add layout id to current layout row
+    ''' add layout id to selected layout row '''
     if not values['-LAYOUT_ID-']:
         sg.popup('Layout Id Not Specified')
         return
@@ -354,7 +346,7 @@ def add_layout_id(row):
     refresh_layout_table()
 
 def add_widget(row,col):
-    # add selected widget to selected layout location
+    ''' add selected widget to selected (row,col) layout location '''
     if col < 1:
         sg.popup('Cannot Add Widget to Layout Id')
         return
@@ -375,7 +367,7 @@ def add_widget(row,col):
         refresh_layout_table()
 
 def clear_widget(row,col):
-    # remove selected widget from selected layout location
+    ''' remove selected widget from selected (row,col) layout location '''
     
     if (layoutvalues[row][col] == EMPTYCELL):
         pass
@@ -395,7 +387,8 @@ def clear_layout_row(row):
         refresh_layout_table()
 
 def create_row_layout(layoutid,row):
-    # add row for widgets to first avaialable layout row
+    ''' Create layout for widgets defined in "row" of the widget table
+        Add to first availalbe layout table row assigning "layoutid as layout id '''
     global layoutvalues
 
     # find first empty row
@@ -422,6 +415,7 @@ def create_row_layout(layoutid,row):
     return 
 
 def create_layout_code():
+    '''parse layout table entries and generate pysimplegui layouts'''
     # place layout code in editor window.
     # first clear out anything there
     window['_BODY_'].update(value='')
@@ -430,29 +424,60 @@ def create_layout_code():
     # place a timestamp in the editor
     insert_text('#\n')
     layout_list = []
+    Last_LayoutId_Was_Continue = False
     for rc in range(len(layoutvalues)):
         if layoutvalues[rc][0] == EMPTYCELL:
             pass
+        elif layoutvalues[rc][0] == CONTINUE_LAYOUT:
+            # add this row to the previous layout as a new "row"
+            layout_preamble = '['
+            Last_LayoutId_Was_Continue = True
+            parse_layout_widgets(rc,layout_preamble)
         else:
+            # assume layout row with a layout id
+            if Last_LayoutId_Was_Continue:
+                 insert_text(']')  
+            Last_LayoutId_Was_Continue = False
             layoutid = layoutvalues[rc][0]
-            layout_text = layoutid  + '= ['
-
-            for widx in range(1, len(layoutvalues[rc])):
-                widget = layoutvalues[rc][widx]
-                if widget !=  EMPTYCELL:
-                    winfo = Saved_widgets[widget]
-                    widget_text = create_widget_code(winfo)
-                    layout_text += widget_text + ','
-            layout_text = layout_text[:-1] + ']'
-            #print (layout_text)
-            # add this layout id to editor window
-            insert_text(layout_text)
+            layout_preamble = layoutid  + '= ['
+            # is the next layout row a continuation?
+            nxt_rc = rc + 1
+            if nxt_rc < len(layoutvalues):
+                if layoutvalues[nxt_rc][0] == CONTINUE_LAYOUT:
+                    layout_preamble = layoutid  + '= [['   
+            
+            parse_layout_widgets(rc,layout_preamble)
             # add to master
             layout_list.append(layoutid)
+
+    if Last_LayoutId_Was_Continue:
+        insert_text(']') 
+
     insert_text('layout = [')       
     for layout in layout_list:
         insert_text('[' + str(layout) + '],')
     insert_text(']') 
+
+def parse_layout_widgets(rc,layout_text):
+    ''' Parse layout table row rc adding widget code to editor  '''
+    for widx in range(1, len(layoutvalues[rc])):
+        widget = layoutvalues[rc][widx]
+        if widget !=  EMPTYCELL:
+            winfo = Saved_widgets[widget]
+            widget_text = create_widget_code(winfo)
+            layout_text += widget_text + ','
+    # do we need the ',' at the end?       
+    nxt_rc = rc + 1
+    if nxt_rc < len(layoutvalues):
+        if layoutvalues[nxt_rc][0] == CONTINUE_LAYOUT:
+            layout_text = layout_text[:-1] + '],'
+        else:
+            layout_text = layout_text[:-1] + ']' 
+    else:
+        layout_text = layout_text[:-1] + ']'         
+    #print (layout_text)
+    # add this layout id to editor window
+    insert_text(layout_text)
 
 
 ################################## Editor functions #############################################################################
@@ -489,11 +514,11 @@ def save_file_as():
         return file
 
 def execute_py_file():
+    ''' execute the script written to the editor window '''
     global subprocess_Popen
-# execute the script written to the editor window
+
 # should probably create a temp file for this, but not today
     # if we already kicked off the viewer, terminate it
-    sg.popup('View Layout')
     if subprocess_Popen != None:
         if subprocess_Popen.poll() == None:
         #    subprocess_Popen.terminate()    # note this should work, but does not on Windows
@@ -535,12 +560,20 @@ def show_ctrl_codes():
 
 
 def about_me():
-    sg.popup_no_wait('guibuilder 0.0')
+    #sg.popup_no_wait('guibuilder 0.0')
+    try:
+        #open text file in read mode
+        text_file = open("README.md", "r")
+        notes = text_file.read()
+        text_file.close()
+    except:
+        notes = 'Could not read README.md?'
 
+    choice, _ = sg.Window('About',[[sg.Multiline(default_text = notes,font=('Consolas', 12),size=(132,25))]]).read(close=True) 
 ########################################## main menu functions for saving and loading widget dictionary ##################################
 def save_data(formname):
     global Saved_layouts
-    #save what we have worked on
+    # save what we have worked on
     # we save widgets as a dictionary
     # layouts and containers as their respective table values
     # probably some issues will arise but for now it is what we are doing
@@ -594,7 +627,8 @@ widget_tab = [
 
 layout_tab = [
 [sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
-[sg.Button('Add Id',size=(15,1),tooltip=None)],
+[sg.Button('Add Id',size=(15,1),tooltip=None),sg.Button('Continue Layout',size=(15,1),tooltip=None)],
+[sg.HSep()],
 #[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
 #[sg.Button('Select Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
 #[sg.Button('Row Create',tooltip= 'Builds layout definition based on selected Widget Table Row')],
@@ -745,7 +779,7 @@ layout = [
 ]
 
 ############################################## Windows                ############################################################
-window = sg.Window('guiBuilder', layout=layout, margins=(0, 0),size=(1080,900), resizable=True,  finalize=True)
+window = sg.Window('guiBuilder', layout=layout, margins=(0, 0),size=WINDOW_SIZE, resizable=True,  finalize=True)
 pos_x, pos_y = window.current_location()
 win_width, win_height = window.size
 
@@ -845,9 +879,14 @@ while True:
     
     elif event == 'Delete Widget':
         delete_widget(values)
-    
+
+   # layout tab events  
     elif event == 'Add Id':
         add_layout_id(selected_layout_row)
+
+    elif event == 'Continue Layout':
+        layoutvalues[selected_layout_row][0] = CONTINUE_LAYOUT
+        refresh_layout_table()
 
     elif event == 'Add Widget':
         add_widget(selected_layout_row,selected_layout_col)
@@ -867,6 +906,10 @@ while True:
 
     
     elif event == 'Auto Create':
+        # create layouts for each row of widgets in widget table
+        # first clear the layout table
+        layoutvalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
+        window['_BODY_'].update(value='')
         for rw in range(len(layoutvalues)):
             for widget in tablevalues[rw]:
                 if widget != EMPTYCELL: 
