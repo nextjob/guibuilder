@@ -3,7 +3,7 @@
 #
 # create a user guide
 #
-# if parameter enable_events = True, add to event loop? to 
+# if parameter enable_events = True, add to event loop? also
 #  would mean guibuilder_tester.py would get more complicated
 #
 # add copy and paste  using Tkinter built in ctrl fuctions
@@ -40,7 +40,7 @@
 #   Email:      israel.dryer@gmail.com
 #   Modified:   2020-06-20
 
-from lib2to3.pgen2.literals import evalString
+import argparse
 import PySimpleGUI as sg
 import subprocess
 import time
@@ -61,13 +61,20 @@ WIN_W = 90
 WIN_H = 25
 MAX_PROPERTIES = 60    # max number of properties we are setup to display
 #
-# note column sizing is kind of a copout, still cannot get table to update size when additional columns are added.  
-TABLE_COL_COUNT = 10  # number of columns to create for layout table
-TABLE_ROW_COUNT = 25  # and rows
+
 EMPTYCELL = '-       -'
 CONTINUE_LAYOUT = '+++++++++'
 # text for selected layout table cell text box
 SELECT_CELL_TEXT = 'Selected Cell (r/c): '
+
+## global var (i know, i shouldn't)
+window = None   # the all important pysimplegui window created in main()
+
+# note column sizing is kind of a copout, still cannot get table to update size when additional columns are added.  
+# these can now be set by caller with guibuilder -r rowcount -c col count
+table_col_count = 10  # number of columns to create for layout table
+table_row_count = 25  # and rows
+
 #
 # indexes into the data saved in the widget dictionary
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
@@ -82,9 +89,13 @@ COL_IDX  = 2  # COL NBR
 PARM_IDX  = 3  # List of parameters entered, calculated by comparing "default" widget signature to what is in the parameter explorer
 
 # layout table values, start as empty cell
-tablevalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)]
-layoutvalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
-containervalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
+#tablevalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)]
+#layoutvalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)] 
+#containervalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)] 
+# now initialized in main, allowing for user specified sizing
+tablevalues = []
+layoutvalues = [] 
+containervalues = []
 
 #define some colors
 WIDGET_TABLE_COLOR = 'light steel blue'
@@ -175,16 +186,10 @@ def save_widget(values):
 
     row = int(values['-ROW-'])
     col = int(values['-COL-'])
-    if (tablevalues[row][col] == values['-WIDGET_ID-']) or (tablevalues[row][col] == EMPTYCELL):
-        pass
-    else:
-        sg.popup('There is a widget at this position, not allowed' )
-        return
 
-# all is well, save the widget
-#      
 # First figure out which parameters user changed, add them to parm_list
 # rem we should have a 1 to 1 relationship between Dflt_parms  and the input box id of the property inspector
+
     parm_list = []
     parm_cnt = len(Dflt_parms)
     if parm_cnt > MAX_PROPERTIES:
@@ -203,18 +208,49 @@ def save_widget(values):
             parm_value = str(Dflt_parms[i][1])
             parm_idx = Dflt_parms[i][2]
             widget_parm_value = str(values[f'-PARM_VALUE_KEY{i}-'])
-    #        print (parm_value, widget_parm_value)
+            #print (parm_value, widget_parm_value)
             if parm_value != widget_parm_value:
                 parm_list.append([parm_idx,parm_name,widget_parm_value])
             else:
                 # add default key?
                 if parm_name == 'key' and dflt_key != None:
                     parm_list.append([parm_idx,parm_name,str(dflt_key)])  
-
-
-    Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'], parm_list]
+  
+   
     # place widget key in table
-    table_update(values['-WIDGET_ID-'])
+    #table_update(values['-WIDGET_ID-'])
+    widget_name = values['-WIDGET_ID-'] 
+    if tablevalues[row][col] == widget_name:
+        pass
+    elif tablevalues[row][col] == EMPTYCELL:
+        if is_duplicate(tablevalues[row],widget_name):
+           widget_name = widget_name+'_cpy' 
+        tablevalues[row][col] = widget_name 
+    else:
+        if is_duplicate(tablevalues[row],widget_name):
+           widget_name = widget_name+'_cpy'
+        msg = ' Widget existing at this location, Insert Before ' + tablevalues[row][col] + '?'
+        if sg.popup_yes_no(msg) == "Yes":
+            tablevalues[row].insert(col,widget_name)
+            # if "extra" cell on end of list is empty, tirm it else warn
+            if len(tablevalues[row]) > table_col_count:
+                if tablevalues[row][table_col_count] == EMPTYCELL:
+                    tablevalues[row].pop() 
+                else:
+                    msg = 'Warning, Widget Table Row:' + str(len(tablevalues[row])) + ' Contains a value and is not Visable \n'
+                    msg += 'Suggest saving data, then restart guibuilder with larger column count'
+                    sg.popup(msg)  
+
+    # we now save widget position in table at time of form data save only
+    # this means we must test for a "move" of the widgets within the table
+    # if we are doing this create a "copy
+    # we need to make sure we didn't "move" this widget to a new position 
+ 
+    Saved_widgets[widget_name] = [values['-SEL_WIDGET-'][0],0, 0, parm_list]                
+
+    refresh_table()
+
+    # attempt simple syntax validation of widget code and warn user if something not correct
     widget_code = create_widget_code(Saved_widgets[values['-WIDGET_ID-']])
     try:
         eval(widget_code) 
@@ -236,20 +272,22 @@ def delete_widget(values):
         return
     if sg.popup_ok_cancel('Delete - ' + key +'?') == 'OK':
         del Saved_widgets[key]
+        save_postion_data()
+        load_widget_table()
         refresh_table() 
         window['Delete Widget'].update(visible = False)
 
 
 def getwidget(row,col):
     ''' get the widget at the cell clicked and display in the property inspector '''
-    global Dflt_parms
+    global Dflt_parms, Saved_widgets, tablevalues
 
-    global Saved_widgets, tablevalues
+# update col and row selected    
+    window['-COL-'].update(value = col)
+    window['-ROW-'].update(value = row)
 # table was clicked at cell row,col see if we have anthing saved there (or more precisely in tablevalues)
     if tablevalues[row][col] == EMPTYCELL:
         # empty cell, update row and col selection for next widget add
-        window['-COL-'].update(value = col)
-        window['-ROW-'].update(value = row)
         window['-WIDGET_ID-'].update(value = '')
         window['-WIDGET_TXT-'].update(value = '')
     else:
@@ -264,9 +302,6 @@ def getwidget(row,col):
         #
         # now updated inspector with saved info
         #
-        window['-COL-'].update(value = wInfo[COL_IDX])
-        window['-ROW-'].update(value = wInfo[ROW_IDX])
-
         index = gw.widget_list.index(widget)
         window['-SEL_WIDGET-'].update(set_to_index=[index], scroll_to_index=index)
         window['-WIDGET_ID-'].update(value =key)
@@ -281,73 +316,43 @@ def getwidget(row,col):
     # show the delete key
         window['Delete Widget'].update(visible = True)
 
-def table_update(key):
-    ''' Place the widget saved in Saved_widgets with reference "key" in the widget table'''
-    global Saved_widgets, tablevalues
-#
-# key - key for Saved_widgets dictionary of saved widgets 
-#
-    newrow = -1  # flag for changed row
-    newcol = -1  # flag for changed col
-    wInfo = Saved_widgets[key]
-    if wInfo == None:
-        sg.popup('Error', key + ' Not Found in Saved_widgets?')
-        return
-    row = int(wInfo[ROW_IDX])
-    # if we selected a "row" larger than the row list, append  another row and set row to it
-    if len(tablevalues) < row:
-        tablevalues.append([EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)])
-        row = len(tablevalues) - 1
-        newrow = row
+def save_postion_data():
+    '''Add  row and column positions for widgets in widget table to Saved_widgets'''
+    global Saved_widgets
+    for row in range(len(tablevalues)):
+        for col in range(len(tablevalues[row])):
+            key = tablevalues[row][col]
+            if key != EMPTYCELL:
+                if key in Saved_widgets:
+                    wInfo = Saved_widgets[key] 
+                    up_dict = {key:[wInfo[WDGT_IDX],row,col,wInfo[PARM_IDX]]}
+                    Saved_widgets.update(up_dict) 
 
-    col = int(wInfo[COL_IDX])
-    # if we selected a "column" within the col list, 
-    # and its empty, (or already contains this widget) add / update it
-    # else append to end
-    # note save_widget should catch this so code really is not necessary
-    if col < len(tablevalues[row]):
-        if (tablevalues[row][col] == key) or (tablevalues[row][col] == EMPTYCELL):
-            tablevalues[row][col] = key
-        else:
-            tablevalues[row].append(key)
-            newcol = len(tablevalues[row])-1
-    
-    # selected a col larger than the col list, append
-    else:
-        tablevalues[row].append(key)
-        newcol = len(tablevalues[row])-1
-
-    # did we change col / row selected by user? if so we must update the dictionary
-    # 
-    if newrow > -1:
-        row = newrow  # row changed
-    if newcol > -1:
-        col = newcol  # col changed
-    up_dict = {key:[wInfo[WDGT_IDX],row,col,wInfo[PARM_IDX]]}
-    Saved_widgets.update(up_dict)        
-    # note  need to figure out how to resize display area of table. Only solution provided so far is to close and recreate the window object
-    refresh_table()
-# update the "next" col postion
-    col +=1
-    window['-COL-'].update(value = col)
-
-def refresh_table():
+def load_widget_table():
+    ''' load widiget table from Saved_widgets'''
     global tablevalues
     # first initialize table data with EMPTYCELL
-    rows = len(tablevalues)
-    if rows > 0:
-        cols = len(tablevalues[0])
-    else:
-        cols = TABLE_COL_COUNT+1
-    tablevalues = [[EMPTYCELL for col in range(1,cols+1)] for count in range(rows)]
+    tablevalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)]
 
     # now populate with defined widgets
     for key in Saved_widgets:
         wInfo = Saved_widgets[key]
         row = int(wInfo[ROW_IDX])
         col = int(wInfo[COL_IDX])
-        tablevalues[row][col] = key
+        tablevalues[row][col] = key  
+
+def is_duplicate(widget_row_list,widget_name): 
+    ''' is widget name already in widget row list?'''
+    for widget in widget_row_list:
+        if widget == widget_name:
+            return True
+    return False               
+
+
+def refresh_table():
     window['-TABLE-'].update(values = tablevalues)
+
+ 
 
 def refresh_layout_table():
     window['-LAYOUT_TABLE-'].update(values = layoutvalues) 
@@ -357,7 +362,7 @@ def refresh_container_table():
 
 ################################## layout create functions ######################################################################
 
-def add_layout_id(row):
+def add_layout_id(row,values):
     ''' add layout id to selected layout row '''
     if not values['-LAYOUT_ID-']:
         sg.popup('Layout Id Not Specified')
@@ -366,7 +371,7 @@ def add_layout_id(row):
     layoutvalues[row][0] = values['-LAYOUT_ID-']
     refresh_layout_table()
 
-def add_widget(row,col):
+def add_widget(row,col,values):
     ''' add selected widget to selected (row,col) layout location '''
     if col < 1:
         sg.popup('Cannot Add Widget to Layout Id')
@@ -518,14 +523,14 @@ def open_file():
         window['_INFO_'].update(value=file.absolute())
         return file
 
-def save_file(file):
+def save_file(file,values):
     '''Save file instantly if already open; otherwise use `save-as` popup'''
     if file:
         file.write_text(values.get('_BODY_'))
     else:
         save_file_as()
 
-def save_file_as():
+def save_file_as(values):
     '''Save new file or save existing file with another name'''
     filename = sg.popup_get_file('Save As', save_as=True, no_window=True)
     if filename:
@@ -534,7 +539,7 @@ def save_file_as():
         window['_INFO_'].update(value=file.absolute())
         return file
 
-def execute_py_file():
+def execute_py_file(values):
     ''' execute the script written to the editor window '''
     global subprocess_Popen
 
@@ -598,6 +603,9 @@ def save_data(formname):
     # we save widgets as a dictionary
     # layouts and containers as their respective table values
     # probably some issues will arise but for now it is what we are doing
+
+    # first update Saved_widgets with widget table row and col positions
+    save_postion_data()
             
     save_data = {}
     save_data['widgets'] = Saved_widgets
@@ -625,7 +633,8 @@ def load_data():
                     layoutvalues = save_data['layouts']
                     containervalues =save_data['containers'] 
                     fp.close()
-                    tablevalues = [[EMPTYCELL for col in range(1,TABLE_COL_COUNT+1)] for count in range(TABLE_ROW_COUNT)]
+                    tablevalues = [[EMPTYCELL for col in range(1,table_col_count+1)] for count in range(table_row_count)]
+                    load_widget_table()
                     refresh_table()
                     refresh_layout_table()
                     refresh_container_table()
@@ -635,335 +644,366 @@ def load_data():
         except OSError as e:
             sg.popup(f"{type(e)}: {e}" + str(filename)+'.json')
 
-################################## start of layouts #############################################################################
-widget_tab = [
-[sg.Text('Widget Id'),sg.Input(size=(20,1), key = '-WIDGET_ID-',do_not_clear=True,)],
-[sg.Checkbox('Save As KEY',default =True, key = '-SAVE_AS_KEY-')],
-[sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',default_text = "0",do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',default_text = "0",do_not_clear=True,)],
-# dropdown list of widgets to select from
-[sg.Text('Widgets'),sg.Listbox(values=gw.widget_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_WIDGET-')],
-#[sg.Button('Save Widget',tooltip='Saves widget and places on Widget Table'),sg.Button('Delete Widget',visible=False)]
-[sg.Button('Save Widget',tooltip=None),sg.Button('Delete Widget',visible=False)]
-]
+    ################################## start of layouts #############################################################################
+def create_layout():
+    widget_tab = [
+    [sg.Text('Widget Id'),sg.Input(size=(20,1), key = '-WIDGET_ID-',do_not_clear=True,)],
+    [sg.Checkbox('Save As KEY',default =True, key = '-SAVE_AS_KEY-')],
+    [sg.Text('Row'),sg.Input(size=(5,1), key = '-ROW-',default_text = "0",do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-COL-',default_text = "0",do_not_clear=True,)],
+    # dropdown list of widgets to select from
+    [sg.Text('Widgets'),sg.Listbox(values=gw.widget_list,size=(20,5), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_WIDGET-')],
+    #[sg.Button('Save Widget',tooltip='Saves widget and places on Widget Table'),sg.Button('Delete Widget',visible=False)]
+    [sg.Button('Save Widget',tooltip=None),sg.Button('Delete Widget',visible=False)]
+    ]
 
-layout_tab = [
-[sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
-[sg.HSep()],
-[sg.Text(SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-LAYOUT_COL_ROW_TXT-')],
-[sg.Button('Add Id',size=(15,1),tooltip=None),sg.Button('Continue Layout',size=(15,1),tooltip=None)],
+    layout_tab = [
+    [sg.Text('Layout Id'),sg.Input(size=(20,1), key = '-LAYOUT_ID-',do_not_clear=True)],
+    [sg.HSep()],
+    [sg.Text(SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-LAYOUT_COL_ROW_TXT-')],
+    [sg.Button('Add Id',size=(15,1),tooltip=None),sg.Button('Continue Layout',size=(15,1),tooltip=None)],
 
-#[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
-#[sg.Button('Add Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
-#[sg.Button('Add Row',tooltip= 'Builds layout definition based on selected Widget Table Row')],
-#[sg.Button('Auto Create',tooltip='Builds layout definition based on Widget postioning in Widget Table')],
-[sg.Button('Add Widget',size=(15,1),tooltip=None),sg.Button('Clear Widget',size=(15,1),tooltip=None)],
-[sg.Button('Add Row',size=(15,1),tooltip=None),sg.Button('Clear Row',size=(15,1),tooltip=None)],
-[sg.Button('Auto Create',size=(15,1),tooltip=None)],
-[sg.HSep()],
-#[sg.Button('Generate Layout',tooltip='Creates pysimplygui code for layouts in layout definition table, places in editor')]
-[sg.Button('Generate Layout',tooltip=None)]
-]
+    #[sg.Text('Row'),sg.Input(size=(5,1), key = '-C_ROW-',do_not_clear=True,),sg.Text('Col'),sg.Input(size=(5,1), key = '-C_COL-',do_not_clear=True)],
+    #[sg.Button('Add Widget',tooltip= 'Appends Widget to selected Layout Table Layout')],
+    #[sg.Button('Add Row',tooltip= 'Builds layout definition based on selected Widget Table Row')],
+    #[sg.Button('Auto Create',tooltip='Builds layout definition based on Widget postioning in Widget Table')],
+    [sg.Button('Add Widget',size=(15,1),tooltip=None),sg.Button('Clear Widget',size=(15,1),tooltip=None)],
+    [sg.Button('Add Row',size=(15,1),tooltip=None),sg.Button('Clear Row',size=(15,1),tooltip=None)],
+    [sg.Button('Auto Create',size=(15,1),tooltip=None)],
+    [sg.HSep()],
+    #[sg.Button('Generate Layout',tooltip='Creates pysimplygui code for layouts in layout definition table, places in editor')]
+    [sg.Button('Generate Layout',tooltip=None)]
+    ]
 
-container_tab = [
-[sg.Text('Container Id'),sg.Input(size=(20,1), key = '-CONTAINER_ID-',do_not_clear=True)],
-[sg.HSep()],
-[sg.Text(SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-CONTAINER_COL_ROW_TXT-')],
-# dropdown list of containers to select from
-[sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,3), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
-[sg.Button('Add Layout',size=(15,1),tooltip=None),sg.Button('Clear Layout',size=(15,1),tooltip=None)],
-[sg.Button('Clear Conatiner',size=(15,1),tooltip=None)],
-[sg.HSep()],
-[sg.Button('Save Container'),sg.Button('Generate Code',size=(15,1),tooltip=None)]
-]
+    container_tab = [
+    [sg.Text('Container Id'),sg.Input(size=(20,1), key = '-CONTAINER_ID-',do_not_clear=True)],
+    [sg.HSep()],
+    [sg.Text(SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col) ,size=(30,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-CONTAINER_COL_ROW_TXT-')],
+    # dropdown list of containers to select from
+    [sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,3), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
+    [sg.Button('Add Layout',size=(15,1),tooltip=None),sg.Button('Clear Layout',size=(15,1),tooltip=None)],
+    [sg.Button('Clear Conatiner',size=(15,1),tooltip=None)],
+    [sg.HSep()],
+    [sg.Button('Save Container'),sg.Button('Generate Code',size=(15,1),tooltip=None)]
+    ]
 
-entry_layout =[
-[sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
-[sg.HSep()],    
-[sg.TabGroup([[sg.Tab('Widgets', widget_tab,background_color=WIDGET_TABLE_COLOR,),sg.Tab('Layouts', layout_tab,background_color=LAYOUT_TABLE_COLOR), sg.Tab('Containers', container_tab,background_color=CONTAINER_TABLE_COLOR)]],key = '-TABS-',tab_location='top')], 
-[sg.HSep()],
-# parameter inspector list of labels and input boxes
-[sg.Text('',size=(20,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-WIDGET_TXT-')],
-*[[sg.Text(f'Parameter {i:02}',key = f'-PARM_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PARM_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
-]
+    entry_layout =[
+    [sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
+    [sg.HSep()],    
+    [sg.TabGroup([[sg.Tab('Widgets', widget_tab,background_color=WIDGET_TABLE_COLOR,),sg.Tab('Layouts', layout_tab,background_color=LAYOUT_TABLE_COLOR), sg.Tab('Containers', container_tab,background_color=CONTAINER_TABLE_COLOR)]],key = '-TABS-',tab_location='top')], 
+    [sg.HSep()],
+    # parameter inspector list of labels and input boxes
+    [sg.Text('',size=(20,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-WIDGET_TXT-')],
+    *[[sg.Text(f'Parameter {i:02}',key = f'-PARM_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PARM_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
+    ]
 
-### prebuild our layout table
-tableheadings = [f'Col {col}' for col in range(TABLE_COL_COUNT)]
-layout_heading = [f'Widget {col}' for col in range(TABLE_COL_COUNT)]
-layout_heading[0] = 'Layout Id'
-container_heading = [f'Layout {col}' for col in range(TABLE_COL_COUNT)]
-container_heading[0] = 'Container Id'
+    ### prebuild our layout table
+    tableheadings = [f'Col {col}' for col in range(table_col_count)]
+    layout_heading = [f'Widget {col}' for col in range(table_col_count)]
+    layout_heading[0] = 'Layout Id'
+    container_heading = [f'Layout {col}' for col in range(table_col_count)]
+    container_heading[0] = 'Container Id'
 
 
 
-editor_layout =  [
-[sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
-[sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
-]
+    editor_layout =  [
+    [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
+    [sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
+    ]
 
-widget_table = [
-    [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
-                    auto_size_columns=False,
-                    font=('Consolas', 12),
-                    col_widths = 25, 
-                    # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
-                    display_row_numbers=True,
-                    justification='center',
-                    num_rows=7,
-                    alternating_row_color= WIDGET_TABLE_COLOR,
-                    key='-TABLE-',
-#                    selected_row_colors='red on yellow',
-                    enable_events=True,
-                    expand_x=False,
-                    expand_y=False,
-                    vertical_scroll_only=False,
-                    hide_vertical_scroll = False,
-                    enable_click_events=True,           # Comment out to not enable header and other clicks
-                    tooltip='Widget Table')]
-]
+    widget_table = [
+        [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
+                        auto_size_columns=False,
+                        font=('Consolas', 12),
+                        col_widths = 25, 
+                        # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
+                        display_row_numbers=True,
+                        justification='center',
+                        num_rows=7,
+                        alternating_row_color= WIDGET_TABLE_COLOR,
+                        key='-TABLE-',
+    #                    selected_row_colors='red on yellow',
+                        enable_events=True,
+                        expand_x=False,
+                        expand_y=False,
+                        vertical_scroll_only=False,
+                        hide_vertical_scroll = False,
+                        enable_click_events=True,           # Comment out to not enable header and other clicks
+                        tooltip='Widget Table')]
+    ]
 
-layout_table = [
-    [sg.Table(layoutvalues, headings=layout_heading, max_col_width=25,
-                    auto_size_columns=False,
-                    font=('Consolas', 12),
-                    col_widths = 25, 
-                    # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
-                    display_row_numbers=True,
-                    justification='center',
-                    num_rows=7,
-                    alternating_row_color= LAYOUT_TABLE_COLOR,
-                    key='-LAYOUT_TABLE-',
-#                    selected_row_colors='red on yellow',
-                    enable_events=True,
-                    expand_x=False,
-                    expand_y=False,
-                    vertical_scroll_only=False,
-                    hide_vertical_scroll = False,
-                    enable_click_events=True,           # Comment out to not enable header and other clicks
-                    tooltip='Layout Table')]
-]
+    layout_table = [
+        [sg.Table(layoutvalues, headings=layout_heading, max_col_width=25,
+                        auto_size_columns=False,
+                        font=('Consolas', 12),
+                        col_widths = 25, 
+                        # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
+                        display_row_numbers=True,
+                        justification='center',
+                        num_rows=7,
+                        alternating_row_color= LAYOUT_TABLE_COLOR,
+                        key='-LAYOUT_TABLE-',
+    #                    selected_row_colors='red on yellow',
+                        enable_events=True,
+                        expand_x=False,
+                        expand_y=False,
+                        vertical_scroll_only=False,
+                        hide_vertical_scroll = False,
+                        enable_click_events=True,           # Comment out to not enable header and other clicks
+                        tooltip='Layout Table')]
+    ]
 
-container_table = [
-    [sg.Table(containervalues, headings=container_heading, max_col_width=25,
-                    auto_size_columns=False,
-                    font=('Consolas', 12),
-                    col_widths = 25, 
-                    # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
-                    display_row_numbers=True,
-                    justification='center',
-                    num_rows=7,
-                    alternating_row_color= CONTAINER_TABLE_COLOR,
-                    key='-CONTAINER_TABLE-',
-#                    selected_row_colors='red on yellow',
-                    enable_events=True,
-                    expand_x=False,
-                    expand_y=False,
-                    vertical_scroll_only=False,
-                    hide_vertical_scroll = False,
-                    enable_click_events=True,           # Comment out to not enable header and other clicks
-                    tooltip='Container Table')]
-]
+    container_table = [
+        [sg.Table(containervalues, headings=container_heading, max_col_width=25,
+                        auto_size_columns=False,
+                        font=('Consolas', 12),
+                        col_widths = 25, 
+                        # cols_justification=('left','center','right','c', 'l', 'bad'),       # Added on GitHub only as of June 2022
+                        display_row_numbers=True,
+                        justification='center',
+                        num_rows=7,
+                        alternating_row_color= CONTAINER_TABLE_COLOR,
+                        key='-CONTAINER_TABLE-',
+    #                    selected_row_colors='red on yellow',
+                        enable_events=True,
+                        expand_x=False,
+                        expand_y=False,
+                        vertical_scroll_only=False,
+                        hide_vertical_scroll = False,
+                        enable_click_events=True,           # Comment out to not enable header and other clicks
+                        tooltip='Container Table')]
+    ]
 
-#
-editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
-editor_tools_menu =['Unused', ['Version','Insert']]
+    #
+    editor_file_menu = ['Unused',['New', 'Open', 'Save', 'Save As', '---', 'Exit']]
+    editor_tools_menu =['Unused', ['Version','Insert']]
 
-editor_layout = [
-[
-sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),
-sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)),
-sg.Button('Paste',size=(10,1)),
-sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-"),
-#sg.Button('View Layout',size=(12,1),tooltip='Execute this layout in a new process'),
-sg.Button('View Layout',size=(12,1),tooltip=None),
-],
-[sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
+    editor_layout = [
+    [
+    sg.ButtonMenu('File',editor_file_menu,size=(10,1),key="-EFILE-"),
+    sg.Button('Cut',size=(10,1)),sg.Button('Copy',size=(10,1)),
+    sg.Button('Paste',size=(10,1)),
+    sg.ButtonMenu('Tools',editor_tools_menu,size=(10,1),key="-ETOOLS-"),
+    #sg.Button('View Layout',size=(12,1),tooltip='Execute this layout in a new process'),
+    sg.Button('View Layout',size=(12,1),tooltip=None),
+    ],
+    [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
 
-[sg.Multiline(font=('Consolas', 12), size=(132, WIN_H),horizontal_scroll = True, key='_BODY_')]  
-] 
+    [sg.Multiline(font=('Consolas', 12), size=(132, WIN_H),horizontal_scroll = True, key='_BODY_')]  
+    ] 
 
-## not sure which layout is preferable
-# tables and editor in panes (allows for edit window to be dragged larger)
-# col1 =   sg.Column([[sg.Frame('Widgets', widget_table)],[sg.Frame('Layouts', layout_table)]])
-# col2 =   sg.Column([[sg.Frame('Containers', container_table)]])
-# col3 =   sg.Column([[sg.Frame('Editor', editor_layout)]])
+    ## not sure which layout is preferable
+    # tables and editor in panes (allows for edit window to be dragged larger)
+    # col1 =   sg.Column([[sg.Frame('Widgets', widget_table)],[sg.Frame('Layouts', layout_table)]])
+    # col2 =   sg.Column([[sg.Frame('Containers', container_table)]])
+    # col3 =   sg.Column([[sg.Frame('Editor', editor_layout)]])
 
-# pane_list = [col1,col2,col3]
+    # pane_list = [col1,col2,col3]
 
-# table_editor_layout = [
-# [sg.Pane(pane_list, background_color=None,size=(None,None), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=1, key=None, visible=True)],
-# ]
+    # table_editor_layout = [
+    # [sg.Pane(pane_list, background_color=None,size=(None,None), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=1, key=None, visible=True)],
+    # ]
 
-## or
-#tables in one pane  edit window fixed
-col1 =   sg.Column([[sg.Frame('Widgets', widget_table,pad=0)]])
-col2 =   sg.Column([[sg.Frame('Layouts', layout_table,pad=0)],[sg.Frame('Containers', container_table,pad=0)]])
+    ## or
+    #tables in one pane  edit window fixed
+    col1 =   sg.Column([[sg.Frame('Widgets', widget_table,pad=0)]])
+    col2 =   sg.Column([[sg.Frame('Layouts', layout_table,pad=0)],[sg.Frame('Containers', container_table,pad=0)]])
 
-pane_list = [col1,col2]
+    pane_list = [col1,col2]
 
-table_editor_layout = [
-[sg.Pane(pane_list, background_color=None,size=(None,400), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=0, key=None, visible=True)],
-[sg.Frame('Editor', editor_layout,pad=0)]
-]
+    table_editor_layout = [
+    [sg.Pane(pane_list, background_color=None,size=(None,400), pad=None,orientation='vertical', show_handle=True, relief=sg.RELIEF_RAISED, handle_size=15, border_width=0, key=None, visible=True)],
+    [sg.Frame('Editor', editor_layout,pad=0)]
+    ]
 
-# main menu 
-menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
-              ['Help', ['Ctrl Code','About']]]
+    # main menu 
+    menu_layout = [['File', ['Load', 'Save', '---', 'Exit']],
+                ['Help', ['Ctrl Code','About']]]
 
-# guibuilder main form layout
-layout = [
- [sg.Menu(menu_layout)],
-# [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,size=(600,300),vertical_alignment='top',scrollable = True)]
-[sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,vertical_alignment='top')]
-]
+    # guibuilder main form layout
+    layout = [
+    [sg.Menu(menu_layout)],
+    # [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,size=(600,300),vertical_alignment='top',scrollable = True)]
+    [sg.Column(entry_layout,vertical_alignment='top',scrollable = True,vertical_scroll_only = True,expand_y=True), sg.Column(table_editor_layout,vertical_alignment='top')]
+    ]
+    return layout
+
 
 ############################################## Windows                ############################################################
-window = sg.Window('guiBuilder', layout=layout, margins=(0, 0),size=WINDOW_SIZE, resizable=True,  finalize=True)
-pos_x, pos_y = window.current_location()
-win_width, win_height = window.size
+def main():
+    global window, Dflt_parms, table_col_count, table_row_count, tablevalues, layoutvalues, containervalues
 
-#EditWindow = sg.Window('Editor',layout=editor_layout, resizable=True, location =(pos_x + win_width,pos_y), size=(600,win_height), return_keyboard_events=True, finalize=True)
-#window.maximize()
-#EditWindow['_BODY_'].expand(expand_x=True, expand_y=True)
+    table_col_count = 10  # number of columns to create for layout table
+    table_row_count = 25  # and rows
+    # user can specify starting row and col count for tables
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--columns', help='Initial table column count', type=int, default=table_col_count)
+    parser.add_argument('-r', '--rows', help='Initial table row count', type=int, default=table_row_count)
+    args = parser.parse_args()
+    
+    table_col_count = args.columns
+    table_row_count = args.rows
+
+    # layout table values, start as empty cell
+    tablevalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)]
+    layoutvalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)] 
+    containervalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)] 
+        
+    layout = create_layout()
+    window = sg.Window('guiBuilder', layout=layout, margins=(0, 0),size=WINDOW_SIZE, resizable=True,  finalize=True)
+    pos_x, pos_y = window.current_location()
+    win_width, win_height = window.size
+
+    #EditWindow = sg.Window('Editor',layout=editor_layout, resizable=True, location =(pos_x + win_width,pos_y), size=(600,win_height), return_keyboard_events=True, finalize=True)
+    #window.maximize()
+    #EditWindow['_BODY_'].expand(expand_x=True, expand_y=True)
 
 
-############################################## all important event loop ############################################################
-while True:
- #   windowid, event, values = sg.read_all_windows()
-    event, values = window.read()
- #   print(event, values)
-    if event == sg.WIN_CLOSED or event == 'Exit':
-        # if we kicked off the viewer, terminate it
-        if subprocess_Popen != None:
-            if subprocess_Popen.poll() == None:
-        #    subprocess_Popen.terminate()    # note this should work, but does not on Windows
-                subprocess.call(['taskkill', '/F', '/T', '/PID', str(subprocess_Popen.pid)])
+    ############################################## all important event loop ############################################################
+    while True:
+    #   windowid, event, values = sg.read_all_windows()
+        event, values = window.read()
+    #   print(event, values)
+        if event == sg.WIN_CLOSED or event == 'Exit':
+            # if we kicked off the viewer, terminate it
+            if subprocess_Popen != None:
+                if subprocess_Popen.poll() == None:
+            #    subprocess_Popen.terminate()    # note this should work, but does not on Windows
+                    subprocess.call(['taskkill', '/F', '/T', '/PID', str(subprocess_Popen.pid)])
 
-        break
-
-    # layout table events
-    elif isinstance(event, tuple):
-        # TABLE CLICKED Event has value in format ('-TABLE=', '+CLICKED+', (row,col))
-        # You can also call Table.get_last_clicked_position to get the cell clicked
-        if event[0] == '-TABLE-':
-            selected_widget_row = event[2][0] 
- #           if event[2][0] == -1 and event[2][1] != -1:           # Header was clicked and wasn't the "row" column
- #           sg.popup('Cell Clicked: ', (f'{event[2][0]},{event[2][1]}'))
-            # user clicked table cell, get the widget at that location
-            getwidget(event[2][0],event[2][1])
-
-        elif event[0] == '-LAYOUT_TABLE-':
-            selected_layout_row = event[2][0] 
-            selected_layout_col = event[2][1]
-            window['-LAYOUT_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col))
-
-        elif event[0] == '-CONTAINER_TABLE-':
-            selected_container_row = event[2][0] 
-            selected_container_col = event[2][1]
-            window['-CONTAINER_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col))
-
-# Menu events
-
-    elif event in ('Load'):
-        if sg.popup_ok_cancel('Warning, existing data will be overwritten') == 'OK':
-            load_data()
-
-    elif event in ('Save'):
-        if not values['-FORM_NAME-']:
-            sg.popup('Save Data','No Form Name')
-        else:
-            save_data(values['-FORM_NAME-'])
-
-    elif event == 'About':
-        about_me()
-
-    elif event == 'Ctrl Code':
-        show_ctrl_codes()
-
-# Button Menu -FILE- Events
-    elif event == '-EFILE-':
-        if values['-EFILE-'] == 'New':
-            file = new_file()
-        if values['-EFILE-'] == 'Open':
-            file = open_file()
-        if values['-EFILE-'] == 'Save':
-            save_file(file)
-        if values['-EFILE-'] == 'Save As':
-            file = save_file_as()
-        if values['-EFILE-'] == 'Exit':
             break
-# cut copy paste
-    elif event == 'Cut':
-        cut_text()
-    elif event == 'Copy':
-        copy_text()
-    elif event == 'Paste':
-        paste_text() 
-    elif event == 'View Layout':
-        execute_py_file()
 
-# Button Menu -TOOL- Events
-    elif event == '-ETOOLS-':
-        if values['-ETOOLS-'] == 'Insert':
-            insert_text('My dummy text to insert')
-        elif values['-ETOOLS-'] == 'Version':
-            sg.main_get_debug_data()
+        # layout table events
+        elif isinstance(event, tuple):
+            # TABLE CLICKED Event has value in format ('-TABLE=', '+CLICKED+', (row,col))
+            # You can also call Table.get_last_clicked_position to get the cell clicked
+            #if event[2][0] == -1 and event[2][1] != -1:           # Header was clicked and wasn't the "row" column
+            if event[0] == '-TABLE-':
+                if event[2][0] == None:           # column resize was attempted
+                    pass
+                elif (event[2][0] == -1) or (event[2][1] == -1):
+                    pass  # header or "row" column was clicked
+                else:
+                    # cell was clicked, get widget (if any)
+                    selected_widget_row = event[2][0] 
+                    getwidget(event[2][0],event[2][1])
 
-    elif event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
-        widget = values['-SEL_WIDGET-'][0]
-    # rem returns default property values, used to id which ones user entered and needs to be saved
-        Dflt_parms = parm_inspector(gw.get_props(getattr(sg,widget)))
+            elif event[0] == '-LAYOUT_TABLE-':
+                selected_layout_row = event[2][0] 
+                selected_layout_col = event[2][1]
+                window['-LAYOUT_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_layout_row) + ' / ' + str(selected_layout_col))
 
-    elif event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
-        container = values['-SEL_CONTAINER-'][0]
-    # rem returns default property values, used to id which ones user entered and needs to be saved
-        Dflt_parms = parm_inspector(gw.get_props(getattr(sg,container)))
+            elif event[0] == '-CONTAINER_TABLE-':
+                selected_container_row = event[2][0] 
+                selected_container_col = event[2][1]
+                window['-CONTAINER_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col))
 
-    elif event == 'Save Widget':
-        save_widget(values)
-    
-    elif event == 'Delete Widget':
-        delete_widget(values)
+    # Menu events
 
-   # layout tab events  
-    elif event == 'Add Id':
-        add_layout_id(selected_layout_row)
+        elif event in ('Load'):
+            if sg.popup_ok_cancel('Warning, existing data will be overwritten') == 'OK':
+                load_data()
 
-    elif event == 'Continue Layout':
-        layoutvalues[selected_layout_row][0] = CONTINUE_LAYOUT
-        refresh_layout_table()
+        elif event in ('Save'):
+            if not values['-FORM_NAME-']:
+                sg.popup('Save Data','No Form Name')
+            else:
+                save_data(values['-FORM_NAME-'])
 
-    elif event == 'Add Widget':
-        add_widget(selected_layout_row,selected_layout_col)
+        elif event == 'About':
+            about_me()
 
-    elif event == 'Clear Widget':
-        clear_widget(selected_layout_row,selected_layout_col)  
+        elif event == 'Ctrl Code':
+            show_ctrl_codes()
 
-    elif event == 'Clear Row':
-        clear_layout_row(selected_layout_row)  
+    # Button Menu -FILE- Events
+        elif event == '-EFILE-':
+            if values['-EFILE-'] == 'New':
+                file = new_file()
+            if values['-EFILE-'] == 'Open':
+                file = open_file()
+            if values['-EFILE-'] == 'Save':
+                save_file(file,values)
+            if values['-EFILE-'] == 'Save As':
+                file = save_file_as(values)
+            if values['-EFILE-'] == 'Exit':
+                break
+    # cut copy paste
+        elif event == 'Cut':
+            cut_text()
+        elif event == 'Copy':
+            copy_text()
+        elif event == 'Paste':
+            paste_text() 
+        elif event == 'View Layout':
+            execute_py_file(values)
 
-    elif event == 'Add Row':  
-        if not values['-LAYOUT_ID-']:
-            sg.popup('Missing Layout Id')
-        else:
-            layoutid = values['-LAYOUT_ID-']
-            create_row_layout(layoutid,selected_widget_row)
+    # Button Menu -TOOL- Events
+        elif event == '-ETOOLS-':
+            if values['-ETOOLS-'] == 'Insert':
+                insert_text('My dummy text to insert')
+            elif values['-ETOOLS-'] == 'Version':
+                sg.main_get_debug_data()
 
-    
-    elif event == 'Auto Create':
-        # create layouts for each row of widgets in widget table
-        # first clear the layout table
-        layoutvalues = [[EMPTYCELL for col in range(TABLE_COL_COUNT)] for count in range(TABLE_ROW_COUNT)] 
-        window['_BODY_'].update(value='')
-        for rw in range(len(layoutvalues)):
-            for widget in tablevalues[rw]:
-                if widget != EMPTYCELL: 
-                    # this row has atleast one widget in it, process 
-                    # cheap hack for layout id, need to figure something better (and unique)
-                    layoutid = 'layout'+str(rw) 
-                    create_row_layout(layoutid,rw)
-                    break
+        elif event == '-SEL_WIDGET-' and len(values['-SEL_WIDGET-']):
+            widget = values['-SEL_WIDGET-'][0]
+        # rem returns default property values, used to id which ones user entered and needs to be saved
+            Dflt_parms = parm_inspector(gw.get_props(getattr(sg,widget)))
 
-    elif event == 'Generate Layout':
-        create_layout_code()
-       
-window.close()
+        elif event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
+            container = values['-SEL_CONTAINER-'][0]
+        # rem returns default property values, used to id which ones user entered and needs to be saved
+            Dflt_parms = parm_inspector(gw.get_props(getattr(sg,container)))
+
+        elif event == 'Save Widget':
+            save_widget(values)
+        
+        elif event == 'Delete Widget':
+            delete_widget(values)
+
+    # layout tab events  
+        elif event == 'Add Id':
+            add_layout_id(selected_layout_row,values)
+
+        elif event == 'Continue Layout':
+            layoutvalues[selected_layout_row][0] = CONTINUE_LAYOUT
+            refresh_layout_table()
+
+        elif event == 'Add Widget':
+            add_widget(selected_layout_row,selected_layout_col,values)
+
+        elif event == 'Clear Widget':
+            clear_widget(selected_layout_row,selected_layout_col)  
+
+        elif event == 'Clear Row':
+            clear_layout_row(selected_layout_row)  
+
+        elif event == 'Add Row':  
+            if not values['-LAYOUT_ID-']:
+                sg.popup('Missing Layout Id')
+            else:
+                layoutid = values['-LAYOUT_ID-']
+                create_row_layout(layoutid,selected_widget_row)
+
+        
+        elif event == 'Auto Create':
+            # create layouts for each row of widgets in widget table
+            # first clear the layout table
+            layoutvalues = [[EMPTYCELL for col in range(table_col_count)] for count in range(table_row_count)] 
+            window['_BODY_'].update(value='')
+            for rw in range(len(layoutvalues)):
+                for widget in tablevalues[rw]:
+                    if widget != EMPTYCELL: 
+                        # this row has atleast one widget in it, process 
+                        # cheap hack for layout id, need to figure something better (and unique)
+                        layoutid = 'layout'+str(rw) 
+                        create_row_layout(layoutid,rw)
+                        break
+
+        elif event == 'Generate Layout':
+            create_layout_code()
+        
+    window.close()
+
+if __name__ == "__main__":
+   main()    
