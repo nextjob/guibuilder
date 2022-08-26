@@ -1,4 +1,34 @@
+# guibuilder.py
 # 
+# This is free and unencumbered software released into the public domain.
+
+# Anyone is free to copy, modify, publish, use, compile, sell, or
+# distribute this software, either in source code form or as a compiled
+# binary, for any purpose, commercial or non-commercial, and by any
+# means.
+
+# In jurisdictions that recognize copyright laws, the author or authors
+# of this software dedicate any and all copyright interest in the
+# software to the public domain. We make this dedication for the benefit
+# of the public at large and to the detriment of our heirs and
+# successors. We intend this dedication to be an overt act of
+# relinquishment in perpetuity of all present and future rights to this
+# software under copyright law.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+#
+# For more information, please refer to <https://unlicense.org>
+# 
+# to do list:
+# Up and down arrow keys in all 3 tab groups or along side tables to move selected row up or down
+#    look up how to copy list vs assign duplicate references.
+#
 # Container logic needs to be added
 #
 # create a user guide
@@ -30,11 +60,10 @@
 # 
 # See README.md for simple users guide
 
+#   Arrow images used for table row move buttons from the Tango Desktop Project http://tango.freedesktop.org/Tango_Desktop_Project
+#   Demo_Base64_Single_Image_Encoder.py  used to convert into Base64
+#
 #   Multiline Editor code based on:
-#   A minimalist pysimplegui builder
-#  
-#   Editor based on :
-#  
 #   A minimalist Notepad built with the PySimpleGUI TKinter framework
 #   Author:     Israel Dryer
 #   Email:      israel.dryer@gmail.com
@@ -80,7 +109,7 @@ table_row_count = 25  # and rows
 #   Saved_widgets[values['-WIDGET_ID-']] = [values['-SEL_WIDGET-'][0],values['-ROW-'], values['-COL-'],values['-LAYOUT_ID-']]
 Dflt_parms = []           # created list of widget parameter names default values
 Saved_widgets = {}        # empty dictionary of saved widgets 
-
+Saved_containers = {}     # empty dictionary of saved container widgets
 
 # Widget Dictionary layout  
 WDGT_IDX = 0  # WIDGET ID (one of pysimplegui widgets)
@@ -223,12 +252,14 @@ def save_widget(values):
     if tablevalues[row][col] == widget_name:
         pass
     elif tablevalues[row][col] == EMPTYCELL:
-        if is_duplicate(tablevalues[row],widget_name):
-           widget_name = widget_name+'_cpy' 
+        if is_duplicate(tablevalues,widget_name):
+           widget_name = widget_name+'_cpy'
+           sg.popup("Note: Id name is a duplicate, changed to: " + widget_name ) 
         tablevalues[row][col] = widget_name 
     else:
-        if is_duplicate(tablevalues[row],widget_name):
+        if is_duplicate(tablevalues,widget_name):
            widget_name = widget_name+'_cpy'
+           sg.popup("Note: Id name is a duplicate, changed to: " + widget_name )
         msg = ' Widget existing at this location, Insert Before ' + tablevalues[row][col] + '?'
         if sg.popup_yes_no(msg) == "Yes":
             tablevalues[row].insert(col,widget_name)
@@ -341,24 +372,151 @@ def load_widget_table():
         col = int(wInfo[COL_IDX])
         tablevalues[row][col] = key  
 
-def is_duplicate(widget_row_list,widget_name): 
-    ''' is widget name already in widget row list?'''
-    for widget in widget_row_list:
-        if widget == widget_name:
-            return True
+def is_duplicate(table_list,id_to_test): 
+    ''' is id_to_test already in table?'''
+    for row in table_list:
+        for cell_value in row:
+            if cell_value == id_to_test:
+                return True
     return False               
 
+################# container functions ###########################################
+def save_container(values):
+    ''' save the container currently displayed on the entry screen / parameter inspector '''
+    global Saved_containers
+# save the widget currently displayed on the entry screen / parameter inspector 
+# then place it on the container table
+# do some error checking first 
+# rem - values['-key-'] return a list
+# and an empty list is false (implicit booleanness of the empty list)
+    if not values['-SEL_WIDGET-']:
+        sg.popup('No Widget Selected')
+        return
+    if not values['-WIDGET_ID-']:
+        sg.popup('Missing Widget Id')
+        return
+    if not values['-ROW-']:
+        sg.popup('Missing Row')
+        return
+    if not values['-COL-']:
+        sg.popup('Missing Col')
+        return  
+    if not values['-ROW-'].isnumeric():
+        sg.popup('Row not Numeric: ' +str(values['-ROW-']) )
+        return
+    if not values['-COL-'].isnumeric():
+        sg.popup('Col not Numeric: ' +str(values['-COL-']) )
+        return  
 
+    row = int(values['-ROW-'])
+    col = int(values['-COL-'])
+
+# First figure out which parameters user changed, add them to parm_list
+# rem we should have a 1 to 1 relationship between Dflt_parms  and the input box id of the property inspector
+
+    parm_list = []
+    parm_cnt = len(Dflt_parms)
+    if parm_cnt > MAX_PROPERTIES:
+        parm_cnt = MAX_PROPERTIES
+
+    # auto create key value?
+    if values['-SAVE_AS_KEY-'] == True:
+        dflt_key = '-' + str(values['-WIDGET_ID-'])  + '-'
+        dflt_key = dflt_key.upper()
+    else:
+        dflt_key = None  
+
+    for i in range(parm_cnt):
+        if values[f'-PARM_VALUE_KEY{i}-']:
+            parm_name = str(Dflt_parms[i][0])
+            parm_value = str(Dflt_parms[i][1])
+            parm_idx = Dflt_parms[i][2]
+            widget_parm_value = str(values[f'-PARM_VALUE_KEY{i}-'])
+            #print (parm_value, widget_parm_value)
+            if parm_value != widget_parm_value:
+                parm_list.append([parm_idx,parm_name,widget_parm_value])
+            else:
+                # add default key?
+                if parm_name == 'key' and dflt_key != None:
+                    parm_list.append([parm_idx,parm_name,str(dflt_key)])  
+  
+   
+    # place widget key in table
+    #table_update(values['-WIDGET_ID-'])
+    widget_name = values['-WIDGET_ID-'] 
+    if tablevalues[row][col] == widget_name:
+        pass
+    elif tablevalues[row][col] == EMPTYCELL:
+        if is_duplicate(tablevalues,widget_name):
+           widget_name = widget_name+'_cpy'
+           sg.popup("Note: Id name is a duplicate, changed to: " + widget_name ) 
+        tablevalues[row][col] = widget_name 
+    else:
+        if is_duplicate(tablevalues,widget_name):
+           widget_name = widget_name+'_cpy'
+           sg.popup("Note: Id name is a duplicate, changed to: " + widget_name )
+        msg = ' Widget existing at this location, Insert Before ' + tablevalues[row][col] + '?'
+        if sg.popup_yes_no(msg) == "Yes":
+            tablevalues[row].insert(col,widget_name)
+            # if "extra" cell on end of list is empty, tirm it else warn
+            if len(tablevalues[row]) > table_col_count:
+                if tablevalues[row][table_col_count] == EMPTYCELL:
+                    tablevalues[row].pop() 
+                else:
+                    msg = 'Warning, Widget Table Row:' + str(len(tablevalues[row])) + ' Contains a value and is not Visable \n'
+                    msg += 'Suggest saving data, then restart guibuilder with larger column count'
+                    sg.popup(msg)  
+
+    # we now save widget position in table at time of form data save only
+    # this means we must test for a "move" of the widgets within the table
+    # if we are doing this create a "copy
+    # we need to make sure we didn't "move" this widget to a new position 
+ 
+    Saved_widgets[widget_name] = [values['-SEL_WIDGET-'][0],0, 0, parm_list]                
+
+    refresh_table()
+
+    # attempt simple syntax validation of widget code and warn user if something not correct
+    widget_code = create_widget_code(Saved_widgets[values['-WIDGET_ID-']])
+    try:
+        eval(widget_code) 
+    
+    except (NameError, SyntaxError):
+        sg.popup('Warning: Syntax Error in widget code', widget_code) 
+    
+    except Exception as e:
+        sg.popup('Warning: Error in widget code', f"{type(e)}: {e} \n" +widget_code) 
+    
+
+################# table functions ###############################################
 def refresh_table():
     window['-TABLE-'].update(values = tablevalues)
-
- 
 
 def refresh_layout_table():
     window['-LAYOUT_TABLE-'].update(values = layoutvalues) 
 
 def refresh_container_table():
     window['-CONTAINER_TABLE-'].update(values = containervalues)  
+
+def move_row_up(t_key,t_values,t_row):
+    '''move selected row - t_row for t_key / t_values - table up one row'''
+    if t_row == 0:
+        pass  # already at the top!
+    else:
+        temp_row = t_values[t_row - 1]
+        t_values[t_row-1] = t_values[t_row]
+        t_values[t_row] = temp_row
+        window[t_key].update(values = t_values)
+
+def move_row_down(t_key,t_values,t_row):
+    '''move selected row - t_row for t_key / t_values - table down one row'''
+    if t_row == len(t_values)-1:
+        pass  # already at the bottom!
+    else:
+        temp_row = t_values[t_row + 1]
+        t_values[t_row+1] = t_values[t_row]
+        t_values[t_row] = temp_row
+        window[t_key].update(values = t_values)       
 
 ################################## layout create functions ######################################################################
 
@@ -681,9 +839,10 @@ def create_layout():
     # dropdown list of containers to select from
     [sg.Text('Containers'),sg.Listbox(values=gw.container_list,size=(20,3), enable_events=True,select_mode = 'LISTBOX_SELECT_MODE_SINGLE',  key ='-SEL_CONTAINER-')],
     [sg.Button('Add Layout',size=(15,1),tooltip=None),sg.Button('Clear Layout',size=(15,1),tooltip=None)],
-    [sg.Button('Clear Conatiner',size=(15,1),tooltip=None)],
     [sg.HSep()],
-    [sg.Button('Save Container'),sg.Button('Generate Code',size=(15,1),tooltip=None)]
+    [sg.Button('Clear Conatiner',size=(15,1),tooltip=None),sg.Button('Save Container')],
+    [sg.HSep()],
+    [sg.Button('Auto Containers'),sg.Button('Generate Code',size=(15,1),tooltip=None)]
     ]
 
     entry_layout =[
@@ -693,7 +852,7 @@ def create_layout():
     [sg.HSep()],
     # parameter inspector list of labels and input boxes
     [sg.Text('',size=(20,1),relief = sg.RELIEF_SUNKEN,border_width = 2,key='-WIDGET_TXT-')],
-    *[[sg.Text(f'Parameter {i:02}',key = f'-PARM_NAME_KEY{i}-', size=(18,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PARM_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
+    *[[sg.Text(f'Parameter {i:02}',key = f'-PARM_NAME_KEY{i}-', size=(14,1), pad=(0,0)),sg.Input(size=(20,1), key = f'-PARM_VALUE_KEY{i}-',pad=(5,0))] for i in range(MAX_PROPERTIES)]
     ]
 
     ### prebuild our layout table
@@ -709,9 +868,15 @@ def create_layout():
     [sg.Text('> New file <', font=('Consolas', 10), size=(WIN_W, 1), key='_INFO_')],
     [sg.Multiline(font=('Consolas', 12), size=(WIN_W, WIN_H), key='_BODY_')]
     ]
-
+    
+    # arrow images from the Tango Desktop Project http://tango.freedesktop.org/Tango_Desktop_Project
+    down_image = b'iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAABHNCSVQICAgIfAhkiAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAL8SURBVDiNtZRPbBRVHMc/781Md1bTGMCkhYNtOIiAnkw0bSFpNCGeOEAwMRyMMaReNCY0JXpFozQWT3JWExsEIzaxJkSREGiJIglRNCqVDSEIxlKqsN3ZeX9+HnZ2O112Wznwkl/e78283+f33nd+v1Eiwv0Y+r5QgbDdi4GR6AaermWjNX9NjZruewLj6Xp76COsNzhvsT7FeYvzBusNqUs4dPittonbgwFQnP7jCFW7QNUukLqk4T+3cc8Kl7nHoVD/a98KYEFYrBqR2lrEs1I1LQtehHgEX3signHVFU/c0HjLSHRSPIONjKFKRHws4vF4vNQsdRUSW27sGRiOFo+uOTU1agaXgL2TsZ7uR5/es/3NYhhEOLGx8xYvFrRHh4L3CQm3iAoaHcAru96IRcCYKhMnxhdmb/15sM5Tea0GhqO9m9Y/uX/H4MvFC9e+oWLnsVSp+jvMVa+R2H9BAQIiEOtOtvbs5uTUVwuXr8/snx4177bUeOo9M/brlR/Gvz13LNm8rp8gVBhV5u/qDFbfIYo1HbEmijXFYszW9bs4f/FscuXGpYk89C4wwNqSG5r+5evvf7z0ndm4tp/ZtITq8EQZMIoDOuKAvp4dlK5etj/9fu7nyrx7sZmjWpXNln2qU6nowvZnX+gNH6roi/PHCUKNDhVKweOrtlGZ0zIxefS6M/aJ6YMy18xoWW5nDshtbczg5Imj/xTcKjas6SfsUEQFzYaH+yi61Xx5/IvbQvBMK2hbMMCpMblqU7vt2OSn5e5oE+sefKxmhc0c/ny8XE3NzjMHkt/axbeUIj8GRsKdqzvXfLz7+ZceCCLFJ599WL45e3Pf6dH0g+XiloCVUgoIcqYB3fdasPeR3t7hoKBUaaZ05Oz77nXA58wBTkTsEnAGjKg1TJjzg2zWT70avBMEuuv8ITOUppgMaDOoBUw2W8DUwVEO2Ow3r00OYtqs03pL16/Q/E+sX1NnlvVdQ4LmE6dAKiL+ro/XTufMryerw10OLpKD/QceAIZcIO5IFQAAAABJRU5ErkJggg=='
+    up_image = b'iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAABHNCSVQICAgIfAhkiAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAL/SURBVDiNtZRNaFxVFMd/5368eZkxRmQsbTEGxbZC0IWMpU5SbCmxILapFCO2LgSlWbhLbFJBcKErP0BcCIqCdeEiUAviQoJIwIgW3biwCoYGjTImTIXWTjsz7+O4yLzwUkuSgjlwuPdd7vmd/z33vCuqymaY2RTqZoLdRjfunXTvg2zfNh8PT01p8r+AByf9S9vv6DuGQWr627vA6Hox65ZiYMIdva1Ufvlg9WhpaM+RYs+t5eN7J4IX1ouTtbpicCyoFEulmacOniidr8+SpBG7ynv4dPrjxpVW48i3b0Rf3rTiR8al13o3/cSBZ0uLV+f46/IFapfmWLh8nsf2PVnyzp0ZnAx33RR4cFK6U2dnDu97pie1LS5c/BFnHNZ4fl36nkZSZ6h6qBuNv6qOye0bAo+MiFXc54/uHundUt5qfln6Dmt8xx2I8MPCF5RuKcrAg0NbjHfTlVHx64Jrd9v3qv1Du/t3VPxPta+xYvHOUwgCfGBQ28Z45dzCWfruvMfdf+9D/V099vSa4IEX/fh9d1WO7a8Mhz/XZjFOCMMCYVggCD2RaeAKQlAw4CPO/XmGygMPh33bdg5XJ/ypPGulK6rj7vG+rTumnjt0qss5j5KikjAzf5pYWtSvzXMt+Wc5SuHwzpNoqmgKzXaLs9OfXK1f/OPp2bfizyD3gxgr478vznW98sHzAFgvzVdPfBj6wNFoLxLZBt4bBFAF44R3PnqtGbc17CCKOBkDVoNnX4/2X1cWNdbiA8+V1hK+YDAGEEFVsVaI2xp+82Yk19d3FfhGZozQiP9GbYwLBOMEEUFTRewNeRsEi6WZXkIMGCs4bzBOiNspsjZ3dVfIsjkRKWRrzbgBCppCmihJpGgC6EpMUUQKIrJKpMuAgO98u84cVTjQO4pKirEgIizfHqTpyhvTDcRAJCJxNne5BDYHdUD95NvHy2sfmHomImcKJKKqmeI8NBuzZKbjHb2kHY+BJFMJtIG2qqb/eTY7SWzOM6jtbElz8CQHV83B/gXtSQriGSyg6AAAAABJRU5ErkJggg=='
+   
+    w_arrows = [[sg.Button('',image_data=up_image,key='-WIDGET_UP-',pad = 0)],[sg.Button('',image_data=down_image,key='-WIDGET_DOWN-',pad = 0)]]
     widget_table = [
-        [sg.Table(tablevalues, headings=tableheadings, max_col_width=25,
+        [sg.Column(w_arrows,pad=0),
+        sg.Table(tablevalues, headings=tableheadings, max_col_width=25,pad=0,
                         auto_size_columns=False,
                         font=('Consolas', 12),
                         col_widths = 25, 
@@ -731,8 +896,10 @@ def create_layout():
                         tooltip='Widget Table')]
     ]
 
+    l_arrows = [[sg.Button('',image_data=up_image,key='-LAYOUT_UP-',pad = 0)],[sg.Button('',image_data=down_image,key='-LAYOUT_DOWN-',pad = 0)]]
     layout_table = [
-        [sg.Table(layoutvalues, headings=layout_heading, max_col_width=25,
+        [sg.Column(l_arrows,pad=0),
+        sg.Table(layoutvalues, headings=layout_heading, max_col_width=25,pad = 0,
                         auto_size_columns=False,
                         font=('Consolas', 12),
                         col_widths = 25, 
@@ -752,8 +919,10 @@ def create_layout():
                         tooltip='Layout Table')]
     ]
 
+    c_arrows = [[sg.Button('',image_data=up_image,key='-CONTAINER_UP-',pad = 0)],[sg.Button('',image_data=down_image,key='-CONTAINER_DOWN-',pad = 0)]]
     container_table = [
-        [sg.Table(containervalues, headings=container_heading, max_col_width=25,
+        [sg.Column(c_arrows,pad=0),
+        sg.Table(containervalues, headings=container_heading, max_col_width=25,pad = 0,
                         auto_size_columns=False,
                         font=('Consolas', 12),
                         col_widths = 25, 
@@ -831,6 +1000,7 @@ def create_layout():
 ############################################## Windows                ############################################################
 def main():
     global window, Dflt_parms, table_col_count, table_row_count, tablevalues, layoutvalues, containervalues
+    global selected_layout_row, selected_layout_col,selected_widget_row, selected_container_row, selected_container_col
 
     table_col_count = 10  # number of columns to create for layout table
     table_row_count = 25  # and rows
@@ -897,14 +1067,28 @@ def main():
                 selected_container_row = event[2][0] 
                 selected_container_col = event[2][1]
                 window['-CONTAINER_COL_ROW_TXT-'].update(value=SELECT_CELL_TEXT + str(selected_container_row) + ' / ' + str(selected_container_col))
+    
+    # table move events move selected row up or down
+        elif event == '-WIDGET_UP-':
+            move_row_up('-TABLE-',tablevalues,selected_widget_row)
+        elif event == '-WIDGET_DOWN-':
+            move_row_down('-TABLE-',tablevalues,selected_widget_row)
+        elif event == '-LAYOUT_UP-':
+            move_row_up('-LAYOUT_TABLE-',layoutvalues,selected_layout_row)
+        elif event == '-LAYOUT_DOWN-':
+            move_row_down('-LAYOUT_TABLE-',layoutvalues,selected_layout_row) 
+        elif event == '-CONTAINER_UP-':
+            move_row_up('-CONTAINTER_TABLE-',containervalues,selected_container_row)
+        elif event == '-CONTAINER_DOWN-':
+            move_row_down('-CONTAINTER_TABLE-',containervalues,selected_container_row)   
 
     # Menu events
 
-        elif event in ('Load'):
+        elif event == 'Load':
             if sg.popup_ok_cancel('Warning, existing data will be overwritten') == 'OK':
                 load_data()
 
-        elif event in ('Save'):
+        elif event == 'Save':
             if not values['-FORM_NAME-']:
                 sg.popup('Save Data','No Form Name')
             else:
@@ -953,7 +1137,10 @@ def main():
         elif event == '-SEL_CONTAINER-' and len(values['-SEL_CONTAINER-']):
             container = values['-SEL_CONTAINER-'][0]
         # rem returns default property values, used to id which ones user entered and needs to be saved
-            Dflt_parms = parm_inspector(gw.get_props(getattr(sg,container)))
+            if container == 'None':
+                Dflt_parms = parm_inspector(gw.get_props('None')) 
+            else:   
+                Dflt_parms = parm_inspector(gw.get_props(getattr(sg,container)))
 
         elif event == 'Save Widget':
             save_widget(values)

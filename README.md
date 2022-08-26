@@ -1,12 +1,12 @@
 # guibuilder
  Minimalist menu based gui builder for pysimplegui (https://www.pysimplegui.org).
  (If you are looking for a drag and drop or polished software to use as your 
-	pysimplegui gui builder, this isn't it)
+    pysimplegui gui builder, this isn't it)
  
  Why? 
-	To learn what is possible with pysimplegui.
-	To Create an open source GUI presentation subsystem for Nextjob-Jobshop
-		https://github.com/nextjob/Nextjob-JobShop
+    To learn what is possible with pysimplegui.
+    To Create an open source GUI presentation subsystem for Nextjob-Jobshop
+        https://github.com/nextjob/Nextjob-JobShop
  
 
  Simple user guide:
@@ -31,8 +31,8 @@
      
  Note on tool tips:
  Tool Tips have been disable because of a bug in Tkinter:
- 	 Issue 46180 "Button clicked failed when mouse hover tooltip and tooltip destroyed"
-	 
+     Issue 46180 "Button clicked failed when mouse hover tooltip and tooltip destroyed"
+     
  Tool Tips to be reactivated when bug is corrected:
  
    Widgets Tab
@@ -56,7 +56,18 @@
     Generate Layout tooltip = 'Creates pysimplygui code for layouts in Layout Table, places code in editor'
     
    Containers Tab
-   	tbc
+
+    Add Layout tooltip = 'Add selected Layout row to Container row at selected cell'
+
+    Clear Layout tooltip = 'Remove selected Layout from Container Table'
+    
+    Clear Container tooltip = 'Remove all Layouts and Container Id from selected Container Table row'
+    
+    Save Container tooltip = 'Saves Container and places on Container Table'
+    
+    Auto Container tooltip = 'Creates container00 -XX for each Layout Id (row) with Container Widget type None'
+    
+    Generate Code tooltip = 'Creates layout code, inserts into editor'
     
  
  This is a work in progress, somewhat working, more to come.
