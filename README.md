@@ -50,6 +50,8 @@
     Clear Widget    tooltip = 'Clears Widget from selected Layout Table Layout'
     
     Add Row         tooltip = 'Builds layout definition based on selected Widget Table Row'
+
+    Clear Row       tooltip = 'Clear Layout Id and Widgets from selected Layout Table Row'
     
     Auto Create     tooltip = 'Builds layout definitions for all Widgets defined in Widget Table'
     
@@ -57,16 +59,14 @@
     
    Containers Tab
 
+    Save Container tooltip = 'Saves Container and places on Container Table'
+
+    Del Container tooltip = 'Remove all Layouts and Container Id from selected Container Table row' 
+    
     Add Layout tooltip = 'Add selected Layout row to Container row at selected cell'
 
     Clear Layout tooltip = 'Remove selected Layout from Container Table'
-    
-    Clear Container tooltip = 'Remove all Layouts and Container Id from selected Container Table row'
-    
-    Save Container tooltip = 'Saves Container and places on Container Table'
-    
-    Auto Container tooltip = 'Creates container00 -XX for each Layout Id (row) with Container Widget type None'
-    
+        
     Generate Code tooltip = 'Creates layout code, inserts into editor'
     
  

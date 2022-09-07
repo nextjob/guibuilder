@@ -16,6 +16,11 @@ def get_props(widget):
       and convert into string
       parse string and split into a list
       return the list of parameters and default values (if any) '''
+  # example returned value for widget Image:
+  # ['source=None', 'filename=None', 'data=None', 'background_color=None', 'size=(None, None)', 's=(None, None)',
+  #  'pad=None', 'p=None', 'key=None', 'k=None', 'tooltip=None', 'subsample=None', 'right_click_menu=None', 
+  # 'expand_x=False', 'expand_y=False', 'visible=True', 'enable_events=False']    
+  #
   if widget == 'None':   # special container widget of no container
     element_list = []
     element_list.append('layout')
@@ -48,5 +53,5 @@ def get_props(widget):
       else:
         element += c
 
-  print (element_list)
+ # print (element_list)
   return element_list
