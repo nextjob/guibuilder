@@ -28,6 +28,7 @@
 # to do list:
 #
 # create_container_code():
+#  must figure out the final layout statement  (layout = [[c2],[c3]])
 #
 # we treat Layout "Add Row" different then "Save Container"
 #  Add Row looks for the first empty layout row, Save Container places at selected row (and inserts if not empty)
@@ -42,13 +43,18 @@
 # if parameter enable_events = True, add to event loop? also
 #  would mean guibuilder_tester.py would get more complicated
 #
-# add copy and paste  using Tkinter built in ctrl fuctions
+# add copy and paste  using Tkinter built in ctrl fuctions:
+#   add cut / copy / paste icons from Tango Desktop Project
+#   have the click event simulate the built in ctrl key functions
+#
+# a few possiblilites on keyboard control:
 # with pyautogui:
 # First install pyautogui with:
 # pip install pyautogui
 # #Then in your code write:
 # import pyautogui
 # pyautogui.hotkey('ctrl', 'v')
+#
 ## or pynput
 # First install pynput with:
 # pip install ppynput
@@ -192,17 +198,22 @@ def dflt_parms(parm_list):
 
 def create_widget_code(winfo):
     ''' Create widget code from passed  dictionary data (winfo) '''
-    dflts = dflt_parms(gw.get_props(getattr(sg,winfo[WDGT_IDX])))
-    widget_text = 'sg.' + str(winfo[WDGT_IDX]) + '('
+    widget = winfo[WDGT_IDX]
+    # if widget == 'None':
+    #     dflts = parm_inspector(gw.get_props('None')) 
+    # else:   
+    #     dflts = parm_inspector(gw.get_props(getattr(sg,widget)))
+
+    widget_text = 'sg.' + str(widget) + '('
     for parms in winfo[PARM_IDX]:
         param_name =parms[1]
         param_value =  parms[2]
-        param_value_pair = dflts[parms[0]]
-        # test parameter type: 1)  uses "parameter name = parameter value" or 2) positional value
-        if param_value_pair[1] != '': 
-        # add "parameter name = parameter value"
-            widget_text += param_name + '=' 
-            
+        #param_value_pair = dflts[parms[0]]
+        # # test parameter type: 1)  uses "parameter name = parameter value" or 2) positional value
+        # if param_value_pair[1] != '': 
+        # # add "parameter name = parameter value"
+        #     widget_text += param_name + '=' 
+        widget_text += param_name + '='    
         # now add parameter value, note we need to look up whether this should be quoted or not
         # somewhat of a cheap hack to add needed info
         if param_name in  gw.quoted_properties:
@@ -530,14 +541,14 @@ def create_layout_code(Add_layout):
 def parse_layout_widgets(rc,layout_text):
     ''' Parse layout table row rc adding widget code to editor  '''
     for widx in range(1, len(layoutvalues[rc])):
-        widget = layoutvalues[rc][widx]
-        if widget !=  gc.EMPTYCELL:
-            if widget in Saved_widgets:
-                winfo = Saved_widgets[widget]
+        widget_id = layoutvalues[rc][widx]
+        if widget_id !=  gc.EMPTYCELL:
+            if widget_id in Saved_widgets:
+                winfo = Saved_widgets[widget_id]
                 widget_text = create_widget_code(winfo)
                 layout_text += widget_text + ','
             else:
-                sg.popup(widget + ' not found, delted?')
+                sg.popup(widget_id + ' not found, delted?')
 
     # do we need the ',' at the end?       
     nxt_rc = rc + 1
@@ -582,7 +593,7 @@ def save_container(values,row):
         dflt_key = '-' + str(values['-CONTAINER_ID-'])  + '-'
         dflt_key = dflt_key.upper()
     else:
-        dflt_key = None  
+        dflt_key = None      
 
     for i in range(parm_cnt):
         if values[f'-PARM_VALUE_KEY{i}-']:
@@ -596,7 +607,23 @@ def save_container(values,row):
             else:
                 # add default key?
                 if parm_name == 'key' and dflt_key != None:
-                    parm_list.append([parm_idx,parm_name,str(dflt_key)])  
+                    parm_list.append([parm_idx,parm_name,str(dflt_key)])   
+
+    # check for missing required parameters, add as necessary
+    for i in range(len(Dflt_parms)):
+        parm_name = str(Dflt_parms[i][0])
+        parm_value = str(Dflt_parms[i][1])
+        # we are making the assumtion that parameters with no default value are required?
+        if parm_value == '':
+            parm_found = False
+            for parm_entry in parm_list:
+                if parm_name == parm_entry[1]:
+                    parm_found == True
+                    break
+            if not parm_found:
+                parm_idx = Dflt_parms[i][2]
+                parm_list.insert(0,[parm_idx,parm_name,''])
+   
 #
 #  place container name on selected row
     container_name = values['-CONTAINER_ID-'] 
@@ -617,23 +644,32 @@ def save_container(values,row):
             newrow[0] = container_name
             containervalues.insert(row,newrow)
 
-    Saved_containers[container_name] = [values['-SEL_CONTAINER-'][0],0, 0, parm_list]                
+    Saved_containers[container_name] = [values['-SEL_CONTAINER-'][0],0, [], parm_list]                
 
     refresh_container_table()
 
     # attempt simple syntax validation of widget code and warn user if something not correct
     widget_code = create_widget_code(Saved_containers[container_name])
+    #
+    # do some simple container code syntax checking
+    # first get the element
+    widget = Saved_containers[container_name][WDGT_IDX]
+    # only test for real widgets not dummy type none
+    if widget != 'None':
+        wmsg = container_syntax_check(widget,widget_code)
+        if wmsg != None:
+            sg.popup(wmsg)
 
-    try:
+        try:
      #   eval(widget_code)  
-     #  print(widget_code)
-       ast.parse(widget_code)
+     #   print(widget_code)
+            ast.parse(widget_code)
     
-    except (NameError, SyntaxError):
-        sg.popup('Warning: Syntax Error in widget code', widget_code) 
+        except (NameError, SyntaxError):
+            sg.popup('Warning: Syntax Error in widget code', widget_code) 
     
-    except Exception as e:
-        sg.popup('Warning: Error in widget code', f"{type(e)}: {e} \n" +widget_code) 
+        except Exception as e:
+            sg.popup('Warning: Error in widget code', f"{type(e)}: {e} \n" +widget_code) 
     
 def save_container_pos_data(): 
     '''Add  row positions for container widgets in container table'''
@@ -650,6 +686,34 @@ def save_container_pos_data():
                 wInfo = Saved_containers[key] 
                 up_dict = {key:[wInfo[WDGT_IDX],row,layout_list,wInfo[PARM_IDX]]}
                 Saved_containers.update(up_dict) 
+
+def container_syntax_check(widget,widget_code):
+    '''check for required parameters for element widget in code widge_code returning warning message'''
+    wmsg = ''
+    emsg = None
+
+    if widget == 'Pane':
+        if 'pane_list' in widget_code:
+            pass
+        else:
+            wmsg = 'requires pane_list parameter \n'
+    else:
+      
+        if 'layout' in widget_code:
+            pass
+        else:
+            wmsg = 'requires layout parameter \n'
+
+        if widget == 'Frame':
+            if 'title' in widget_code:
+                pass
+            else:
+                wmsg += 'requires title parameter \n'
+
+    if len(wmsg) > 0:
+        emsg = 'Warning element type ' + widget + ': \n' + wmsg
+        
+    return emsg               
 
 def getcontainer(row):
     ''' get the container widget at the cell clicked and display in the property inspector '''
@@ -773,8 +837,79 @@ def layout_list_popup():
 
 
 def create_container_code():
-    layout_list = create_layout_code(False)
+    layout_table_layout_list = create_layout_code(False)
 
+    # parse container table, add layouts to container widget, output to editor
+    for row in range(len(containervalues)):
+        layout_text = ''
+        container_id = containervalues[row][0]
+        if container_id != gc.EMPTYCELL:
+            if container_id in Saved_containers:
+                winfo = Saved_containers[container_id]
+                widget = Saved_containers[container_id][WDGT_IDX]
+                # create the layouts to use in widget text string from containervalues 
+                layout_list = '['
+                for layout_idx in range(1,len(containervalues[row])):
+                    is_container = False
+                    layout_id = containervalues[row][layout_idx]
+                    if layout_id != gc.EMPTYCELL:
+                        if layout_id in Saved_containers:
+                            # using a container as a layout in another container only work for a single layout reference
+                            is_container = True
+                            layout_list = layout_id
+                            break
+                        
+                        layout_list +=  layout_id + ','
+                if not is_container:
+                    layout_list = layout_list[:-1] + ']'
+                #
+                # add layout id's to widget layout parameter
+                #
+                if widget == 'Pane':
+                    # set pane_list parameter
+                    replace_dict = {}
+                    replace_dict['pane_list'] = layout_list
+                else:
+                    # set layout parameter
+                    replace_dict = {}
+                    replace_dict['layout'] = layout_list
+
+                if widget == "None":
+                    widget_text =  container_id + ' = ' +  layout_list 
+                else:
+                    widget_text = container_id + ' = ' + create_widget_code_replacing(winfo,replace_dict)
+
+                insert_text(widget_text) 
+                         
+            else:
+                sg.popup(container_id + ' not found, delted?')
+     
+
+
+def create_widget_code_replacing(winfo,replacement_dict):
+    ''' Create widget code from passed dictionary data (winfo) replacing parameter values defined in replacement_dict
+        replacement_dict: dictionary of: replace param : key  text to add : value'''
+    widget = winfo[WDGT_IDX]
+    dflts = dflt_parms(gw.get_props(getattr(sg,widget)))
+
+    widget_text = 'sg.' + str(widget) + '('
+    for parms in winfo[PARM_IDX]:
+        param_name =parms[1]
+        param_value =  parms[2]
+        param_value_pair = dflts[parms[0]]
+        if param_name in replacement_dict:  
+            widget_text += param_name + '=' + replacement_dict[param_name]  + ',' 
+        else:
+            widget_text += param_name + '='
+            if param_name in  gw.quoted_properties:
+                if "'" in param_value:
+                    pass
+                else:
+                    param_value = "'" + param_value + "'"
+            widget_text += param_value + ','
+        
+    widget_text = widget_text[:-1] + ')'
+    return widget_text
 
 ################# table functions ###############################################
 def refresh_table():

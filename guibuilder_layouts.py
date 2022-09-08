@@ -51,7 +51,7 @@ def create_layout(table_col_count,tablevalues,layoutvalues,containervalues):
     entry_layout =[
     [sg.Text('Form Name'),sg.Input(size=(20,1), key = '-FORM_NAME-',do_not_clear=True,)],
     [sg.HSep()],    
-    [sg.TabGroup([[sg.Tab('Widgets', widget_tab,background_color=gc.WIDGET_TABLE_COLOR,),sg.Tab('Layouts', layout_tab,background_color=gc.LAYOUT_TABLE_COLOR), sg.Tab('Containers', container_tab,background_color=gc.CONTAINER_TABLE_COLOR)]],key = '-TABS-',tab_location='top')], 
+    [sg.TabGroup([[sg.Tab( title = 'Widgets',layout = widget_tab,background_color=gc.WIDGET_TABLE_COLOR,),sg.Tab('Layouts', layout_tab,background_color=gc.LAYOUT_TABLE_COLOR), sg.Tab('Containers', container_tab,background_color=gc.CONTAINER_TABLE_COLOR)]],key = '-TABS-',tab_location='top')], 
     [sg.HSep()],
     # parameter inspector list of labels and input boxes
 #    [sg.Text('Id',size=(2,1), pad=(0,0)),sg.Text('',text_color='black',size=(12,1), pad=(0,0),relief = sg.RELIEF_SUNKEN,border_width = 1,key='-WIDGET_ID2-'),sg.Text('Type',size=(4,1), pad=(0,0)),sg.Text('',text_color='black',size=(16,1),pad=(5,0),relief = sg.RELIEF_SUNKEN,border_width = 1,key='-WIDGET_TYPE-') ],

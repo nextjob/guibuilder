@@ -9,7 +9,7 @@ widget_list = ('Button','ButtonMenu','Canvas','Checkbox','Combo','Graph','HSep',
 # set of wdiget properties that require quotes
 quoted_properties =('button_text','default_text','default_values','element_justification','key','k','text','title','tooltip')
 # set of pysimplegui widgets for containing other widgets
-container_list = ('None','Column','Frame','Tab','TabGroup')
+container_list = ('None','Column','Frame','Pane','Tab','TabGroup')
 #
 def get_props(widget):
   ''' get the widget's inspect.signature object 
