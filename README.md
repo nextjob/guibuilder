@@ -28,17 +28,28 @@
   6) Click File -> Load to reload work.
   
   Provided example:
-     Start guibuilder.py
-	 Load -> testform.json
-	 Click Layouts Tab
-	 Click Generate Layout in Layouts Tab
-	 Click View Layout in Editor frame
-	 This displays a simple gui without containers.
-	 To demo containers:
-	 Drag up the container table (click and hold small square icon above Layouts table frame)
-	 Click Containers Tab
-	 Click Generate Code in Containers Tab
-	 Click View Layout in Editor frame
+    
+    Start guibuilder.py
+
+	Load -> testform.json
+	
+	Click Layouts Tab
+	
+	Click Generate Layout in Layouts Tab
+	
+	Click View Layout in Editor frame
+	
+	This displays a simple gui without containers.
+	
+	To demo containers:
+	
+	Drag up the container table (click and hold small square icon above Layouts table frame)
+	
+	Click Containers Tab
+	
+	Click Generate Code in Containers Tab
+	
+	Click View Layout in Editor frame
 
      
  Note on tool tips:
