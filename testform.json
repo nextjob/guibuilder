@@ -5,8 +5,8 @@
             0,
             [
                 "c1",
-                "layout0",
-                "layout1"
+                "drv_info1",
+                "drv_info2"
             ],
             [
                 [
@@ -21,13 +21,18 @@
             1,
             [
                 "c2",
-                "layout2"
+                "drv_info3"
             ],
             [
                 [
                     0,
                     "layout",
                     ""
+                ],
+                [
+                    1,
+                    "background_color",
+                    "green"
                 ],
                 [
                     11,
@@ -37,11 +42,37 @@
             ]
         ],
         "c3": [
-            "Frame",
-            3,
+            "Column",
+            2,
             [
                 "c3",
                 "c1"
+            ],
+            [
+                [
+                    0,
+                    "layout",
+                    ""
+                ],
+                [
+                    1,
+                    "background_color",
+                    "green"
+                ],
+                [
+                    11,
+                    "key",
+                    "-C3-"
+                ]
+            ]
+        ],
+        "c4": [
+            "Frame",
+            3,
+            [
+                "c4",
+                "c2",
+                "c3"
             ],
             [
                 [
@@ -52,19 +83,44 @@
                 [
                     0,
                     "title",
-                    ""
+                    "driver data"
                 ],
                 [
                     12,
                     "key",
-                    "-C3-"
+                    "-C4-"
+                ]
+            ]
+        ],
+        "c6": [
+            "Frame",
+            4,
+            [
+                "c6",
+                "drv_data"
+            ],
+            [
+                [
+                    1,
+                    "layout",
+                    ""
+                ],
+                [
+                    0,
+                    "title",
+                    "car data"
+                ],
+                [
+                    12,
+                    "key",
+                    "-C5-"
                 ]
             ]
         ]
     },
     "layouts": [
         [
-            "layout0",
+            "drv_info1",
             "txt_name",
             "in_name",
             "txt_last",
@@ -76,7 +132,7 @@
             "-       -"
         ],
         [
-            "layout1",
+            "drv_info2",
             "txt_phone",
             "in_phone",
             "-       -",
@@ -88,7 +144,7 @@
             "-       -"
         ],
         [
-            "layout2",
+            "drv_info3",
             "txt_car",
             "lb_car",
             "-       -",
@@ -100,8 +156,8 @@
             "-       -"
         ],
         [
-            "layout3",
-            "tablet",
+            "drv_data",
+            "drv_table",
             "-       -",
             "-       -",
             "-       -",
@@ -365,6 +421,48 @@
         ]
     ],
     "widgets": {
+        "drv_table": [
+            "Table",
+            3,
+            0,
+            [
+                [
+                    0,
+                    "values",
+                    "[['joe','ford','31'],['ben','bmw','40']]"
+                ],
+                [
+                    1,
+                    "headings",
+                    "['Name','Make','Age']"
+                ],
+                [
+                    5,
+                    "auto_size_columns",
+                    "False"
+                ],
+                [
+                    8,
+                    "display_row_numbers",
+                    "True"
+                ],
+                [
+                    42,
+                    "key",
+                    "-TABLET-"
+                ],
+                [
+                    46,
+                    "expand_x",
+                    "True"
+                ],
+                [
+                    47,
+                    "expand_y",
+                    "True"
+                ]
+            ]
+        ],
         "in_age": [
             "Input",
             0,
@@ -452,43 +550,6 @@
                     24,
                     "key",
                     "-LBCAR-"
-                ]
-            ]
-        ],
-        "tablet": [
-            "Table",
-            3,
-            0,
-            [
-                [
-                    0,
-                    "values",
-                    "[[1,2,3]]"
-                ],
-                [
-                    1,
-                    "headings",
-                    "['a','b','c']"
-                ],
-                [
-                    8,
-                    "display_row_numbers",
-                    "True"
-                ],
-                [
-                    42,
-                    "key",
-                    "-TABLET-"
-                ],
-                [
-                    46,
-                    "expand_x",
-                    "True"
-                ],
-                [
-                    47,
-                    "expand_y",
-                    "True"
                 ]
             ]
         ],

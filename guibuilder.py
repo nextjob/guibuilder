@@ -29,6 +29,11 @@
 #
 # create_container_code():
 #  must figure out the final layout statement  (layout = [[c2],[c3]])
+# save interum dict_container_codes BEFORE layout expansion
+# use this to determine which values are output at layout = ... and included in container widget
+#
+# also review list insertion ending up with too many ,, and ],]
+# 
 #
 # we treat Layout "Add Row" different then "Save Container"
 #  Add Row looks for the first empty layout row, Save Container places at selected row (and inserts if not empty)
@@ -492,43 +497,73 @@ def create_row_layout(layoutid,row):
     return 
 
 def create_layout_code(Add_layout):
-    '''parse layout table entries and generate pysimplegui layouts and write to editor'''
-    # place layout code in editor window.
+    '''parse layout table entries and generate pysimplegui layouts 
+       if Add_layouts True, place layout code in editor window 
+       return layout dictionary
+       key: layout id value: widget code'''
     # first clear out anything there
-    window['_BODY_'].update(value='')
-    insert_text('# guibuildertestlayoutfile')
-    insert_text('import PySimpleGUI as sg')
-    # place a timestamp in the editor
-    insert_text('#\n')
+    if Add_layout:
+        window['_BODY_'].update(value='')
+        insert_text('# guibuildertestlayoutfile')
+        insert_text('import PySimpleGUI as sg')
+
     layout_list = []
+    layout_dict = {}
     Last_LayoutId_Was_Continue = False
+   
     for rc in range(len(layoutvalues)):
+        
         if layoutvalues[rc][0] == gc.EMPTYCELL:
             pass
         elif layoutvalues[rc][0] == gc.CONTINUE_LAYOUT:
             # add this row to the previous layout as a new "row"
             layout_preamble = '['
             Last_LayoutId_Was_Continue = True
-            parse_layout_widgets(rc,layout_preamble)
+            last_layoutid = layoutid
+            widgets_text = parse_layout_widgets(rc,layout_preamble)
+            if Add_layout:
+                insert_text(widgets_text)
+            else:
+                layout_dict[last_layoutid] = layout_dict[last_layoutid] + ',' + widgets_text 
+            
         else:
             # assume layout row with a layout id
             if Last_LayoutId_Was_Continue:
-                 insert_text(']')  
+                if Add_layout:
+                    insert_text(']') 
+                else:
+                    layout_dict[last_layoutid] = layout_dict[last_layoutid] + ']'
+                    
+
             Last_LayoutId_Was_Continue = False
             layoutid = layoutvalues[rc][0]
-            layout_preamble = layoutid  + '= ['
+            if Add_layout:
+                layout_preamble = layoutid  + '= ['
+            else:
+                layout_preamble = '['
+
             # is the next layout row a continuation?
             nxt_rc = rc + 1
             if nxt_rc < len(layoutvalues):
                 if layoutvalues[nxt_rc][0] == gc.CONTINUE_LAYOUT:
-                    layout_preamble = layoutid  + '= [['   
+                    if Add_layout:
+                        layout_preamble = layoutid  + '= [[' 
+                    else:
+                        layout_preamble = '[['  
             
-            parse_layout_widgets(rc,layout_preamble)
-            # add to master
+            widgets_text = parse_layout_widgets(rc,layout_preamble)
+            if Add_layout:
+                insert_text(widgets_text)
+            # add to id to the list of layouts created
             layout_list.append(layoutid)
+            # and add layout id to dictionary
+            layout_dict[layoutid] = widgets_text
 
     if Last_LayoutId_Was_Continue:
-        insert_text(']') 
+        if Add_layout:
+            insert_text(']') 
+        else:
+            layout_dict[last_layoutid] = layout_dict[last_layoutid] + ']'
 
     if Add_layout:
         insert_text('layout = [')       
@@ -536,10 +571,11 @@ def create_layout_code(Add_layout):
             insert_text('[' + str(layout) + '],')
         insert_text(']') 
 
-    return layout_list
+    return layout_dict
 
-def parse_layout_widgets(rc,layout_text):
-    ''' Parse layout table row rc adding widget code to editor  '''
+def parse_layout_widgets(rc,preamble_layout_text):
+    ''' Parse layout table row rc returning widget code '''
+    layout_text = preamble_layout_text
     for widx in range(1, len(layoutvalues[rc])):
         widget_id = layoutvalues[rc][widx]
         if widget_id !=  gc.EMPTYCELL:
@@ -561,8 +597,8 @@ def parse_layout_widgets(rc,layout_text):
         layout_text = layout_text[:-1] + ']'         
     #print (layout_text)
     # add this layout id to editor window
-    insert_text(layout_text)
-
+    #insert_text(layout_text)
+    return layout_text
 ################# container functions ###########################################
 
 def save_container(values,row):
@@ -618,12 +654,12 @@ def save_container(values,row):
             parm_found = False
             for parm_entry in parm_list:
                 if parm_name == parm_entry[1]:
-                    parm_found == True
+                    parm_found = True
                     break
             if not parm_found:
                 parm_idx = Dflt_parms[i][2]
                 parm_list.insert(0,[parm_idx,parm_name,''])
-   
+
 #
 #  place container name on selected row
     container_name = values['-CONTAINER_ID-'] 
@@ -837,54 +873,150 @@ def layout_list_popup():
 
 
 def create_container_code():
-    layout_table_layout_list = create_layout_code(False)
 
-    # parse container table, add layouts to container widget, output to editor
+    # expand all layouts and place in dict dict_layout_codes, key: layout id value: widget code
+    dict_layout_codes = create_layout_code(False)
+
+# pass 1
+#   create dict_container_ids:
+#   key: container id values = [0] list of layout and container ids for this container 
+#                              [1] T/F has this container been referenced by another container?
+#
+    dict_container_ids ={}
     for row in range(len(containervalues)):
-        layout_text = ''
+        layout_id_list = []
         container_id = containervalues[row][0]
         if container_id != gc.EMPTYCELL:
             if container_id in Saved_containers:
-                winfo = Saved_containers[container_id]
-                widget = Saved_containers[container_id][WDGT_IDX]
-                # create the layouts to use in widget text string from containervalues 
-                layout_list = '['
                 for layout_idx in range(1,len(containervalues[row])):
-                    is_container = False
                     layout_id = containervalues[row][layout_idx]
                     if layout_id != gc.EMPTYCELL:
-                        if layout_id in Saved_containers:
-                            # using a container as a layout in another container only work for a single layout reference
-                            is_container = True
-                            layout_list = layout_id
-                            break
-                        
-                        layout_list +=  layout_id + ','
-                if not is_container:
-                    layout_list = layout_list[:-1] + ']'
-                #
-                # add layout id's to widget layout parameter
-                #
-                if widget == 'Pane':
-                    # set pane_list parameter
-                    replace_dict = {}
-                    replace_dict['pane_list'] = layout_list
-                else:
-                    # set layout parameter
-                    replace_dict = {}
-                    replace_dict['layout'] = layout_list
+                        layout_id_list.append(layout_id)
+                dict_container_ids[container_id] = [layout_id_list,False] 
 
-                if widget == "None":
-                    widget_text =  container_id + ' = ' +  layout_list 
-                else:
-                    widget_text = container_id + ' = ' + create_widget_code_replacing(winfo,replace_dict)
-
-                insert_text(widget_text) 
-                         
+# pass 2 expand layouts (reference in dict_container_ids as either layout ids or contianer id) into actual widget code
+#   create dict_container_codes:
+#   key: container id values = [0] list of expanded layout code for conatiner 
+#                              [1] T/F has this container been referenced by another container?
+    dict_container_layouts = {}
+    for container_id in dict_container_ids:
+        
+        list_of_ids_to_expand = dict_container_ids[container_id][0]
+        for id in list_of_ids_to_expand:
+                # is the id a layout id?
+            if id in dict_layout_codes:
+                # expand the id to widget code
+                dict_container_layouts[id] = dict_layout_codes[id]
+            # is it another container?
+            elif id in dict_container_ids:
+                # expand the id to container code
+                layout_code_list = dict_container_ids[id][0] 
+                layout_code = layout_list_to_string(id,layout_code_list,dict_container_ids)
+                dict_container_layouts[id] = layout_code
+                # and mark container as referenced by another container
+                up_dict =dict_container_ids[id] 
+                up_dict[1] = True
+                dict_container_ids[id] = up_dict
             else:
-                sg.popup(container_id + ' not found, delted?')
-     
+                sg.popup('Cannot find: ' + id, 'in  Cannot process!')
 
+    # pass 3 process remaining layouts
+    for container_id in  dict_container_ids:
+        if dict_container_ids[container_id][1] == False:
+            layout_code_list = dict_container_ids[container_id][0]
+            layout_code = layout_list_to_string(container_id,layout_code_list,dict_container_ids)
+            dict_container_layouts[container_id] = layout_code
+
+    # # some degug info
+    # dict_layout_codes
+    # print ('dict_layout_codes -------------------------------------------')
+    # for layout_id in  dict_layout_codes:
+    #     print(layout_id,dict_layout_codes[layout_id])
+
+    # print ('dict_container_ids -------------------------------------------')
+    # for container_id in  dict_container_ids:
+    #     print(container_id,dict_container_ids[container_id])
+    
+    # print ('dict_container_layouts --------------------------------------:')
+    # for container_id in  dict_container_layouts:
+    #     print(container_id,dict_container_layouts[container_id])
+
+    # pass 4 output layouts adding  container widget as necessary
+    #  first setup editor
+    window['_BODY_'].update(value='')
+    insert_text('# guibuildertestlayoutfile')
+    insert_text('import PySimpleGUI as sg')
+    
+    for layout_id in dict_container_layouts:
+        if layout_id in Saved_containers:
+            winfo = Saved_containers[layout_id]
+            widget = Saved_containers[layout_id][WDGT_IDX]
+            container_layout = dict_container_layouts[layout_id]
+            # add full widget code
+            #
+            if widget == 'Pane':
+                # set pane_list parameter
+                replace_dict = {}
+                replace_dict['pane_list'] = container_layout
+            else:
+                # set layout parameter
+                replace_dict = {}
+                replace_dict['layout'] = container_layout
+
+            if widget == "None":
+                widget_text = layout_id + '= ' + dict_container_layouts[layout_id]
+            else:
+                widget_text = layout_id + '= [' + create_widget_code_replacing(winfo,replace_dict) + ']'
+
+            insert_text(widget_text)
+
+        else:
+            # simple layout
+            widget_text = layout_id + '= ' + dict_container_layouts[layout_id] 
+            insert_text(widget_text)
+    
+    # pass 5, add in the all important layout statement
+    # we add any containers that have not been previously referenced.
+    layout_text = 'layout = ['
+    for container_id in  dict_container_ids:
+        if dict_container_ids[container_id][1]:
+            pass  # this container has been previously referenced 
+        else:
+            layout_text += '[' + container_id + '],'
+    layout_text = layout_text[:-1] + ']'
+    insert_text(layout_text)
+    
+
+def layout_list_to_string(container_id,layout_code_list,dict_container_ids):
+    '''convert list of layouts in layout_code_list to string'''
+    # layout_code = '['
+    # for layout_id in layout_code_list:
+    #     layout_code += layout_id + ','
+    # layout_code = layout_code[:-1] + ']'
+    # 
+    # we have an issue to figure out here, if the container only includes layouts then we create a list element (,)
+    # otherwise we join (+) not sure how to handle both container and layout reference in a container???
+    all_layouts = True
+    layout_code = ''
+    for layout_id in layout_code_list:
+        if layout_id in dict_container_ids:
+            # is a container
+            all_layouts = False
+            layout_code += layout_id + '+'
+        else:
+            # is a layout          
+            layout_code += layout_id + ','
+
+    layout_code = layout_code[:-1]
+    # not sure if this works:
+    # if layout_ids are all layouts, we add in the extra list bracket
+    # elif there are multiple layouts/containers, we add in the extra list bracket 
+    if all_layouts:
+        layout_code = '['+ layout_code + ']'
+    elif len(layout_code_list) > 1:
+        layout_code = '['+ layout_code + ']'
+
+    return layout_code
 
 def create_widget_code_replacing(winfo,replacement_dict):
     ''' Create widget code from passed dictionary data (winfo) replacing parameter values defined in replacement_dict
@@ -898,7 +1030,7 @@ def create_widget_code_replacing(winfo,replacement_dict):
         param_value =  parms[2]
         param_value_pair = dflts[parms[0]]
         if param_name in replacement_dict:  
-            widget_text += param_name + '=' + replacement_dict[param_name]  + ',' 
+            widget_text += param_name + '=' + replacement_dict[param_name] + ',' 
         else:
             widget_text += param_name + '='
             if param_name in  gw.quoted_properties:
@@ -906,10 +1038,12 @@ def create_widget_code_replacing(winfo,replacement_dict):
                     pass
                 else:
                     param_value = "'" + param_value + "'"
-            widget_text += param_value + ','
+            widget_text += param_value  + ','
         
     widget_text = widget_text[:-1] + ')'
     return widget_text
+
+
 
 ################# table functions ###############################################
 def refresh_table():
@@ -1191,9 +1325,9 @@ def main():
         elif event == '-LAYOUT_DOWN-':
             move_row_down('-LAYOUT_TABLE-',layoutvalues,selected_layout_row) 
         elif event == '-CONTAINER_UP-':
-            move_row_up('-CONTAINTER_TABLE-',containervalues,selected_container_row)
+            move_row_up('-CONTAINER_TABLE-',containervalues,selected_container_row)
         elif event == '-CONTAINER_DOWN-':
-            move_row_down('-CONTAINTER_TABLE-',containervalues,selected_container_row)   
+            move_row_down('-CONTAINER_TABLE-',containervalues,selected_container_row)   
 
     # Menu events
 
